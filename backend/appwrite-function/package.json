@@ -1,0 +1,9 @@
+{
+  "name": "gemini-appwrite-proxy",
+  "version": "1.0.0",
+  "description": "Appwrite function backend proxy for Google Gemini API with spoiler-safe reading boundaries",
+  "main": "index.js",
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0"
+  }
+}

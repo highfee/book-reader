@@ -7,20 +7,60 @@ import '@/global.css';
 
 import { Platform } from 'react-native';
 
+export const AppPalette = {
+  // Dark luxury editorial palette from the reference template
+  background: '#0D0E11',
+  surface: '#16181D',
+  surfaceElevated: '#1F222A',
+  surfaceCard: '#181A20',
+  glassBg: 'rgba(255, 255, 255, 0.08)',
+  glassBorder: 'rgba(255, 255, 255, 0.14)',
+  
+  // Accents
+  white: '#FFFFFF',
+  accentBerry: '#D84A6A',
+  accentBerryHover: '#C03856',
+  accentBerryLight: 'rgba(216, 74, 106, 0.18)',
+  accentGold: '#D97706',
+  accentGreen: '#10B981',
+  accentBlue: '#38BDF8',
+  primaryPink: '#D84A6A',
+  pinkLight: 'rgba(216, 74, 106, 0.18)',
+  playGreen: '#10B981',
+
+  
+  // Typography
+  textPrimary: '#FFFFFF',
+  textSecondary: '#9CA3AF',
+  textMuted: '#6B7280',
+  textDark: '#0D0E11',
+  
+  // Pills & Badges
+  pillActiveBg: '#FFFFFF',
+  pillActiveText: '#0D0E11',
+  pillInactiveBg: 'rgba(255, 255, 255, 0.07)',
+  pillInactiveText: '#9CA3AF',
+  pillInactiveBorder: 'rgba(255, 255, 255, 0.1)',
+} as const;
+
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#FFFFFF',
+    background: '#0D0E11',
+    backgroundElement: '#16181D',
+    backgroundSelected: '#1F222A',
+    textSecondary: '#9CA3AF',
+    primary: AppPalette.white,
+    accent: AppPalette.accentBerry,
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#FFFFFF',
+    background: '#0D0E11',
+    backgroundElement: '#16181D',
+    backgroundSelected: '#1F222A',
+    textSecondary: '#9CA3AF',
+    primary: AppPalette.white,
+    accent: AppPalette.accentBerry,
   },
 } as const;
 
