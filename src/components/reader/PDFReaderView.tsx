@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -61,36 +61,41 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
 }) => {
   const [showTextDrawer, setShowTextDrawer] = useState(false);
   const [pageData, setPageData] = useState<PageContent | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  const source = {
-    uri: fileUri,
-    cache: true,
-  };
+  const onPageTextExtractedRef = useRef(onPageTextExtracted);
+  onPageTextExtractedRef.current = onPageTextExtracted;
+
+  const source = useMemo(() => ({ uri: fileUri, cache: true }), [fileUri]);
 
   useEffect(() => {
     let isCurrent = true;
     setPageData(null);
-    BookContentService.getPageContent(bookTitle, fileUri, currentPage, totalPages || 1).then((data) => {
-      if (isCurrent) {
+    BookContentService.getPageContent(bookTitle, fileUri, currentPage, totalPages || 1)
+      .then((data) => {
+        if (!isCurrent) return;
         setPageData(data);
-        if (onPageTextExtracted && data?.paragraphs?.length) {
-          onPageTextExtracted(data.paragraphs.join('\n\n'));
-        }
-      }
-    });
+        onPageTextExtractedRef.current?.(data.isAuthentic ? data.paragraphs.join('\n\n') : '');
+      })
+      .catch(() => {
+        if (isCurrent) setPageData(null);
+      });
     return () => {
       isCurrent = false;
     };
-  }, [fileUri, currentPage, bookTitle, totalPages, onPageTextExtracted]);
+  }, [fileUri, currentPage, bookTitle, totalPages]);
 
   return (
     <View style={styles.container}>
       <PdfComponent
+        key={`pdf-${reloadKey}`}
         source={source}
         page={currentPage}
         horizontal={false}
         enablePaging={true}
         onLoadComplete={(numberOfPages: number) => {
+          setPdfError(null);
           if (onLoadComplete) onLoadComplete(numberOfPages);
           onPageChange(currentPage || 1, numberOfPages);
         }}
@@ -99,10 +104,32 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
         }}
         onError={(error: any) => {
           console.warn('PDF view error:', error);
+          setPdfError(
+            typeof error === 'string'
+              ? error
+              : 'The PDF renderer could not open this file. It may be encrypted, corrupted, or its storage permission may have expired.'
+          );
         }}
         style={styles.pdf}
         activityIndicator={<ActivityIndicator size="large" color="#D84A6A" />}
       />
+
+      {pdfError && (
+        <View style={styles.pdfErrorCard} pointerEvents="auto">
+          <Text style={styles.pdfErrorTitle}>PDF failed to render</Text>
+          <Text style={styles.pdfErrorText}>{pdfError}</Text>
+          <TouchableOpacity
+            style={styles.pdfErrorRetryBtn}
+            onPress={() => {
+              setPdfError(null);
+              setReloadKey((k) => k + 1);
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.pdfErrorRetryText}>Reload PDF</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Floating Original PDF Companion HUD */}
       <View style={styles.pdfOverlayBar} pointerEvents="box-none">
@@ -176,7 +203,12 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
           </Text>
 
           <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={true}>
-            {pageData && pageData.paragraphs.length > 0 ? (
+            {pageData && !pageData.isAuthentic ? (
+              <Text style={styles.drawerEmptyText}>
+                This page has no extractable text layer (it may be a scanned image), so narration and
+                text selection are unavailable here.
+              </Text>
+            ) : pageData && pageData.paragraphs.length > 0 ? (
               pageData.paragraphs.map((p, idx) => (
                 <View key={idx} style={styles.drawerParagraphWrapper}>
                   <View style={styles.paraBadgeRow}>
@@ -219,6 +251,43 @@ const styles = StyleSheet.create({
     flex: 1,
     width: Dimensions.get('window').width,
     height: Dimensions.get('window').height,
+  },
+  pdfErrorCard: {
+    position: 'absolute',
+    top: 24,
+    left: 24,
+    right: 24,
+    backgroundColor: '#16181D',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(216, 74, 106, 0.4)',
+    padding: 16,
+    zIndex: 120,
+    alignItems: 'center',
+  },
+  pdfErrorTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  pdfErrorText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  pdfErrorRetryBtn: {
+    backgroundColor: '#D84A6A',
+    paddingHorizontal: 18,
+    paddingVertical: 9,
+    borderRadius: 18,
+  },
+  pdfErrorRetryText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
   },
   pdfOverlayBar: {
     position: 'absolute',

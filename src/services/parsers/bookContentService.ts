@@ -6,6 +6,8 @@ export interface PageContent {
   chapterTitle: string;
   paragraphs: string[];
   quote?: string;
+  /** False when the text was synthesized because extraction produced nothing. */
+  isAuthentic: boolean;
 }
 
 export interface TableOfContentsItem {
@@ -54,6 +56,7 @@ export class BookContentService {
             chapterTitle: `Page ${pageNumber}: ${bookTitle}`,
             paragraphs: paragraphs.length > 0 ? paragraphs : [authenticPdfText],
             quote: paragraphs.length > 1 ? paragraphs[0].substring(0, 140) + '...' : undefined,
+            isAuthentic: true,
           };
         }
       } catch (err) {
@@ -75,6 +78,7 @@ export class BookContentService {
           chapterTitle: `Section ${pageNumber}: ${bookTitle}`,
           paragraphs: paragraphs.length > 0 ? paragraphs : [rawPageText],
           quote: paragraphs.length > 1 ? paragraphs[0].substring(0, 140) + '...' : undefined,
+          isAuthentic: true,
         };
       }
     }
@@ -303,6 +307,7 @@ export class BookContentService {
         `As the sun moves across the Aegean skies on page ${pageNumber}, the chronicles of Ithaca and the trials of the wanderer deepen. Every stride upon sea and soil tests the resilience of mortal mind against the whims of destiny.`,
       ],
       quote: b.quote,
+      isAuthentic: false,
     };
   }
 
@@ -354,6 +359,7 @@ export class BookContentService {
         `The tragic consequences of Victor Frankenstein's experiment unfold further on page ${pageNumber}. The narrative captures the profound isolation of knowledge separated from moral responsibility.`,
       ],
       quote: c.quote,
+      isAuthentic: false,
     };
   }
 
@@ -407,6 +413,7 @@ export class BookContentService {
         `Page ${pageNumber} marks a significant progression in your reading session. Your companion AI tracks every observation made up to this precise point, safeguarding future discoveries until you turn the next page.`,
       ],
       quote: `A true conviction is measured not in quiet harbors, but in the tempest when all easy assurances are stripped away.`,
+      isAuthentic: false,
     };
   }
 

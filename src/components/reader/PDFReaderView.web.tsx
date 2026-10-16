@@ -115,6 +115,8 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
 
   const onLoadCompleteRef = useRef(onLoadComplete);
   onLoadCompleteRef.current = onLoadComplete;
+  const onPageTextExtractedRef = useRef(onPageTextExtracted);
+  onPageTextExtractedRef.current = onPageTextExtracted;
   const extractedUriRef = useRef<string | null>(null);
 
   // Dynamically extract the authentic PDF total page count from the file (once per URI)
@@ -195,18 +197,19 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
   useEffect(() => {
     let isCurrent = true;
     setPageData(null);
-    BookContentService.getPageContent(bookTitle, liveUri, currentPage, pdfTotalPages).then((data) => {
-      if (isCurrent) {
+    BookContentService.getPageContent(bookTitle, liveUri, currentPage, pdfTotalPages)
+      .then((data) => {
+        if (!isCurrent) return;
         setPageData(data);
-        if (onPageTextExtracted && data?.paragraphs?.length) {
-          onPageTextExtracted(data.paragraphs.join('\n\n'));
-        }
-      }
-    });
+        onPageTextExtractedRef.current?.(data.isAuthentic ? data.paragraphs.join('\n\n') : '');
+      })
+      .catch(() => {
+        if (isCurrent) setPageData(null);
+      });
     return () => {
       isCurrent = false;
     };
-  }, [liveUri, currentPage, bookTitle, pdfTotalPages, onPageTextExtracted]);
+  }, [liveUri, currentPage, bookTitle, pdfTotalPages]);
 
   const normalizedThemeKey: PaperThemeId =
     theme === 'light' ? 'parchment' : theme === 'dark' ? 'obsidian' : (theme as PaperThemeId);

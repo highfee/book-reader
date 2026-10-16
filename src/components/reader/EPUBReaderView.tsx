@@ -47,6 +47,7 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
     chapterBadge: `PAGE ${currentPage}`,
     chapterTitle: bookTitle,
     paragraphs: ['Loading page content...'],
+    isAuthentic: false,
   });
 
   const normalizedThemeKey: PaperThemeId =
