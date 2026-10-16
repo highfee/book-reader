@@ -274,7 +274,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
           <View style={styles.documentViewportContainer}>
             <iframe
               key={`pdf-viewport-${liveUri}-${currentPage}`}
-              src={`${liveUri}#page=${currentPage}&toolbar=1&navpanes=0`}
+              src={`${liveUri}#page=${currentPage}&zoom=page-fit&pagemode=none&toolbar=0&navpanes=0&statusbar=0&scrollbars=0`}
               style={{
                 width: '100%',
                 height: '100%',
