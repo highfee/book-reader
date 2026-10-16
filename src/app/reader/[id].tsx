@@ -30,7 +30,7 @@ import {
 import { TargetFocusHUD } from '@/components/reader/TargetFocusHUD';
 import { ReaderOverflowModal } from '@/components/reader/ReaderOverflowModal';
 import { NotificationReminderModal } from '@/components/stats/NotificationReminderModal';
-import { BookWithProgress } from '@/types/book';
+import { BookWithProgress, ReadingGoals } from '@/types/book';
 import { BookRepository } from '@/services/database/bookRepository';
 import { useReadingStore } from '@/stores/useReadingStore';
 import { AICompanionModal } from '@/components/ai/AICompanionModal';
@@ -55,7 +55,9 @@ import {
   PAPER_THEMES,
 } from '@/components/reader/ReaderThemeModal';
 
-type ReaderTheme = 'light' | 'sepia' | 'dark';
+function formatGoalLabel(minutes: number): string {
+  return minutes >= 60 ? `${(minutes / 60).toFixed(1)} hrs` : `${minutes}m`;
+}
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -86,8 +88,8 @@ export default function ReaderScreen() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Daily Target HUD state
-  const [dailyTargetMinutes, setDailyTargetMinutes] = useState(20);
-  const [todayBaseMinutes, setTodayBaseMinutes] = useState(0);
+  const [goals, setGoals] = useState<ReadingGoals>({ dailyMinutes: 20, yearlyBooks: 12 });
+  const [todayBaseSeconds, setTodayBaseSeconds] = useState(0);
   const [showTargetHUD, setShowTargetHUD] = useState(true);
   const [showOverflowModal, setShowOverflowModal] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
@@ -136,14 +138,15 @@ export default function ReaderScreen() {
 
     const loadGoalsAndToday = async () => {
       try {
-        const [goals, actMap] = await Promise.all([
+        const [savedGoals, actMap, hudVisibility] = await Promise.all([
           BookRepository.getReadingGoals(),
           BookRepository.getReadingActivityMap(1),
+          BookRepository.getSetting('target_hud_visible'),
         ]);
-        setDailyTargetMinutes(goals.dailyMinutes || 20);
+        setGoals(savedGoals);
         const todayStr = new Date().toISOString().substring(0, 10);
-        const todaySecs = actMap[todayStr]?.durationSeconds || 0;
-        setTodayBaseMinutes(Math.round(todaySecs / 60));
+        setTodayBaseSeconds(actMap[todayStr]?.durationSeconds || 0);
+        if (hudVisibility !== null) setShowTargetHUD(hudVisibility === 'true');
       } catch (e) {
         console.warn('Failed to load goals for reader HUD:', e);
       }
@@ -163,28 +166,25 @@ export default function ReaderScreen() {
     };
   }, [id, tickActiveReadingSecond, endReadingSession]);
 
-  // Load current page text for Audio Studio (TTS narration)
+  // Page text for TTS narration. PDFs supply their own extracted text through
+  // PDFReaderView.onPageTextExtracted, so only EPUBs are fetched here.
   useEffect(() => {
-    if (book) {
-      setCurrentPageText('');
-      const total = totalPages > 1 ? totalPages : 100;
-      let active = true;
-      BookContentService.getPageContent(book.title, book.fileUri, currentPage, total)
-        .then((content) => {
-          if (active) {
-            const text = content.paragraphs.join('\n\n');
-            setCurrentPageText(text);
-          }
-        })
-        .catch(() => {
-          if (active) {
-            setCurrentPageText('');
-          }
-        });
-      return () => {
-        active = false;
-      };
-    }
+    if (!book || book.format === 'pdf') return;
+    setCurrentPageText('');
+    const total = totalPages > 0 ? totalPages : (book.totalPages ?? 1);
+    let active = true;
+    BookContentService.getPageContent(book.title, book.fileUri, currentPage, total)
+      .then((content) => {
+        if (active) {
+          setCurrentPageText(content.isAuthentic ? content.paragraphs.join('\n\n') : '');
+        }
+      })
+      .catch(() => {
+        if (active) setCurrentPageText('');
+      });
+    return () => {
+      active = false;
+    };
   }, [book, currentPage, totalPages]);
 
   const triggerToast = useCallback((msg: string) => {
@@ -193,6 +193,18 @@ export default function ReaderScreen() {
       setToastMessage(null);
     }, 2800);
   }, []);
+
+  const handleSaveGoals = useCallback(async (next: ReadingGoals) => {
+    setGoals(next);
+    await BookRepository.saveReadingGoals(next);
+  }, []);
+
+  const persistHudVisibility = useCallback((visible: boolean) => {
+    setShowTargetHUD(visible);
+    BookRepository.setSetting('target_hud_visible', String(visible)).catch(() => {});
+  }, []);
+
+  const hideTargetHUD = useCallback(() => persistHudVisibility(false), [persistHudVisibility]);
 
   const maxPages = totalPages > 0 ? totalPages : (book?.totalPages && book.totalPages > 0 ? book.totalPages : 1);
 
@@ -214,6 +226,32 @@ export default function ReaderScreen() {
     const prev = Math.max(1, currentPage - 1);
     await updatePageProgress(prev, undefined, maxPages);
   }, [maxPages, currentPage, updatePageProgress, recordUserInteraction]);
+
+  const handlePageChange = useCallback(
+    (page: number, total?: number) => {
+      updatePageProgress(page, undefined, total || maxPages);
+    },
+    [updatePageProgress, maxPages]
+  );
+
+  const handleLoadComplete = useCallback(
+    (total?: number) => {
+      if (!book) return;
+      const nextTotal = total && total > 0 ? total : maxPages;
+      if (total && total > 0 && total !== book.totalPages) {
+        setBook((prev) => (prev ? { ...prev, totalPages: total } : null));
+        BookRepository.updateBookTotalPages(book.id, total).catch(() => {});
+      }
+      updatePageProgress(currentPage, undefined, nextTotal);
+    },
+    [book, maxPages, currentPage, updatePageProgress]
+  );
+
+  const handlePageTextExtracted = useCallback((text: string) => {
+    setCurrentPageText(text || '');
+  }, []);
+
+  const openAudioStudio = useCallback(() => setShowAudioStudio(true), []);
 
   const handleTextSelected = useCallback((text: string, coords?: SelectionCoords | null) => {
     recordUserInteraction();
@@ -425,12 +463,14 @@ export default function ReaderScreen() {
         </View>
       </View>
 
-      {/* Real-Time Daily Hourly Target HUD */}
+      {/* Real-Time Daily Target HUD */}
       {showTargetHUD && (
         <TargetFocusHUD
-          dailyTargetMinutes={dailyTargetMinutes}
-          todayBaseMinutes={todayBaseMinutes}
-          onClose={() => setShowTargetHUD(false)}
+          goals={goals}
+          todayBaseSeconds={todayBaseSeconds}
+          sessionElapsedSeconds={activeReadingSeconds}
+          onSaveGoals={handleSaveGoals}
+          onClose={hideTargetHUD}
         />
       )}
 
@@ -447,24 +487,12 @@ export default function ReaderScreen() {
           fontFamily={fontFamily}
           gutterShadowEnabled={gutterShadowEnabled}
           totalPages={effectiveTotalPages}
-          onPageChange={(page, total) => {
-            updatePageProgress(page, undefined, total || effectiveTotalPages);
-          }}
-          onLoadComplete={(total) => {
-            if (total && total > 0 && book) {
-              setBook((prev) => (prev ? { ...prev, totalPages: total } : null));
-              BookRepository.updateBookTotalPages(book.id, total).catch(() => {});
-            }
-            updatePageProgress(currentPage, undefined, total || effectiveTotalPages);
-          }}
+          onPageChange={handlePageChange}
+          onLoadComplete={handleLoadComplete}
           onTextSelected={handleTextSelected}
           onClearSelection={handleClearSelection}
-          onOpenAudioStudio={() => setShowAudioStudio(true)}
-          onPageTextExtracted={(text) => {
-            if (text && text.trim().length > 0) {
-              setCurrentPageText(text);
-            }
-          }}
+          onOpenAudioStudio={openAudioStudio}
+          onPageTextExtracted={handlePageTextExtracted}
           onNextPage={handleNextPage}
           onPrevPage={handlePrevPage}
           onJumpToPage={handleJumpToPage}
@@ -479,9 +507,7 @@ export default function ReaderScreen() {
           gutterShadowEnabled={gutterShadowEnabled}
           currentPage={currentPage}
           totalPages={effectiveTotalPages}
-          onPageChange={(page, total) => {
-            updatePageProgress(page, undefined, total || effectiveTotalPages);
-          }}
+          onPageChange={handlePageChange}
           onTextSelected={handleTextSelected}
           onClearSelection={handleClearSelection}
         />
@@ -655,16 +681,18 @@ export default function ReaderScreen() {
         onCycleTheme={cycleTheme}
         isDarkTheme={theme === 'obsidian' || theme === 'oled'}
         showTargetHUD={showTargetHUD}
-        onToggleTargetHUD={() => setShowTargetHUD(!showTargetHUD)}
+        onToggleTargetHUD={() => persistHudVisibility(!showTargetHUD)}
         onOpenReminders={() => setShowReminderModal(true)}
-        dailyGoalText={`${todayBaseMinutes + Math.floor(activeReadingSeconds / 60)}m of ${dailyTargetMinutes >= 60 ? (dailyTargetMinutes / 60).toFixed(1) + ' hrs' : dailyTargetMinutes + 'm'} daily goal`}
+        dailyGoalText={`${Math.floor(
+          (todayBaseSeconds + activeReadingSeconds) / 60
+        )}m of ${formatGoalLabel(goals.dailyMinutes)} daily goal`}
       />
 
       {/* Target Reminder Notification Modal */}
       <NotificationReminderModal
         visible={showReminderModal}
         onClose={() => setShowReminderModal(false)}
-        dailyTargetMinutes={dailyTargetMinutes}
+        dailyTargetMinutes={goals.dailyMinutes}
       />
     </SafeAreaView>
   );

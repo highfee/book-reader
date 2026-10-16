@@ -1,654 +1,690 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Animated,
-  PanResponder,
-  Dimensions,
   Platform,
 } from 'react-native';
-import {
-  Target,
-  CheckCircle2,
-  Sparkles,
-  Award,
-  RotateCcw,
-  X,
-  Clock,
-  Flame,
-  ChevronUp,
-} from 'lucide-react-native';
-import { AppPalette, Fonts } from '@/constants/theme';
+import Svg, { Circle } from 'react-native-svg';
+import { Target, Pencil, Crosshair, EyeOff, Sparkles, Gauge } from 'lucide-react-native';
+import { AppPalette } from '@/constants/theme';
+import { GoalSettingsModal } from '@/components/stats/GoalSettingsModal';
 import { ReadingNotificationService } from '@/services/notifications/readingNotificationService';
+import { useDraggableFloating } from '@/hooks/useDraggableFloating';
+import { ReadingGoals } from '@/types/book';
 
 interface TargetFocusHUDProps {
-  dailyTargetMinutes: number;
-  todayBaseMinutes: number;
-  sessionElapsedSeconds?: number;
-  onSprintGoalComplete?: () => void;
+  goals: ReadingGoals;
+  /** Seconds already credited to today from persisted sessions, excluding the live session. */
+  todayBaseSeconds: number;
+  /** Idle-aware seconds accumulated by the current reading session. */
+  sessionElapsedSeconds: number;
+  onSaveGoals: (goals: ReadingGoals) => Promise<void>;
   onClose?: () => void;
 }
 
+const HUB_SIZE = 56;
+const PANEL_WIDTH = 252;
+const SERIF = Platform.select({ web: '"Georgia", "Charter", serif', default: 'serif' });
+const MIN_GOAL_MINUTES = 5;
+const MAX_GOAL_MINUTES = 600;
+const AUTO_COLLAPSE_MS = 25000;
+
+function formatClock(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor(total / 60) % 60;
+  const s = total % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function formatMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h} hr` : `${h} hr ${m} min`;
+}
+
+function ProgressRing({
+  size,
+  strokeWidth,
+  progress,
+  color,
+  children,
+}: {
+  size: number;
+  strokeWidth: number;
+  progress: number;
+  color: string;
+  children?: React.ReactNode;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(1, progress));
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255,255,255,0.10)"
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference}`}
+          strokeDashoffset={circumference * (1 - clamped)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
 export function TargetFocusHUD({
-  dailyTargetMinutes,
-  todayBaseMinutes,
-  sessionElapsedSeconds: externalSessionSeconds,
-  onSprintGoalComplete,
+  goals,
+  todayBaseSeconds,
+  sessionElapsedSeconds,
+  onSaveGoals,
   onClose,
 }: TargetFocusHUDProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [celebrationToast, setCelebrationToast] = useState<string | null>(null);
-  const [localSeconds, setLocalSeconds] = useState(0);
+  const [isGoalModalVisible, setIsGoalModalVisible] = useState(false);
+  const [celebration, setCelebration] = useState<string | null>(null);
+  const [panelHeight, setPanelHeight] = useState(206);
 
-  const [screenDim, setScreenDim] = useState(() => Dimensions.get('window'));
+  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTap = useRef(0);
 
-  useEffect(() => {
-    const sub = Dimensions.addEventListener('change', ({ window }) => {
-      setScreenDim(window);
+  const showCelebration = useCallback((message: string) => {
+    setCelebration(message);
+    if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+    celebrationTimer.current = setTimeout(() => setCelebration(null), 6000);
+  }, []);
+
+  const targetMinutes = Math.max(1, goals.dailyMinutes || 20);
+  const targetSeconds = targetMinutes * 60;
+  const totalSeconds = Math.max(0, todayBaseSeconds) + Math.max(0, sessionElapsedSeconds);
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const progress = Math.max(0, Math.min(1, totalSeconds / targetSeconds));
+  const percentComplete = Math.round(progress * 100);
+  const remainingSeconds = Math.max(0, targetSeconds - totalSeconds);
+  const isGoalReached = totalSeconds >= targetSeconds;
+  const accent = isGoalReached ? AppPalette.accentGreen : AppPalette.accentBerry;
+
+  const { pan, panHandlers, pressScale, pressIn, releasePress, isDragging, edge, swapEdge } =
+    useDraggableFloating({
+      storageKey: 'target_hud_position',
+      widgetWidth: HUB_SIZE,
+      widgetHeight: HUB_SIZE,
+      defaultPosition: (screen) => ({ x: 16, y: Math.max(96, screen.height - 200) }),
+      minTop: 64,
+      bottomInset: 28,
+      onDismiss: onClose,
     });
-    return () => sub?.remove?.();
-  }, []);
 
-  // Internal 1-second timer to avoid forcing parent ReaderScreen to re-render
+  const pulse = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    const timer = setInterval(() => {
-      setLocalSeconds((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(timer);
+    if (!isGoalReached) {
+      pulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 1100, useNativeDriver: false }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isGoalReached, pulse]);
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+      if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    };
   }, []);
 
-  const sessionElapsedSeconds = externalSessionSeconds !== undefined ? externalSessionSeconds : localSeconds;
+  useEffect(() => {
+    if (isGoalReached) return;
+    ReadingNotificationService.checkMilestoneCrossed(targetMinutes, totalMinutes);
+  }, [isGoalReached, targetMinutes, totalMinutes]);
 
-  // Circular Hub Dimensions
-  const HUB_SIZE = 58;
+  useEffect(() => {
+    const unsubscribe = ReadingNotificationService.subscribe((event) => {
+      showCelebration(`${event.title} ${event.body}`);
+    });
+    return unsubscribe;
+  }, [showCelebration]);
 
-  // Default Position: Bottom-Left
-  const getDefaultPosition = () => ({
-    x: 16,
-    y: Math.max(80, screenDim.height - 150),
-  });
-
-  const defaultPos = getDefaultPosition();
-  const pan = useRef(new Animated.ValueXY({ x: defaultPos.x, y: defaultPos.y })).current;
-  const lastOffsetRef = useRef({ x: defaultPos.x, y: defaultPos.y });
-  const isDraggingRef = useRef(false);
-
-  // Expansion Animation (Blooming radial float around hub)
   const expandAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (isExpanded) {
-      Animated.spring(expandAnim, {
-        toValue: 1,
-        useNativeDriver: false,
-        friction: 6,
-        tension: 50,
-      }).start();
-    } else {
-      Animated.spring(expandAnim, {
-        toValue: 0,
-        useNativeDriver: false,
-        friction: 8,
-        tension: 60,
-      }).start();
-    }
-  }, [isExpanded]);
-
-  const [isRightHalf, setIsRightHalf] = useState(false);
-
-  // Check if hub is situated in right half of screen
-  const updateEdgeAffinity = (x: number) => {
-    setIsRightHalf(x > (screenDim.width - HUB_SIZE) / 2);
-  };
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, gesture) => {
-          return Math.abs(gesture.dx) > 6 || Math.abs(gesture.dy) > 6;
-        },
-        onPanResponderGrant: () => {
-          isDraggingRef.current = true;
-          pan.setOffset({
-            x: lastOffsetRef.current.x,
-            y: lastOffsetRef.current.y,
-          });
-          pan.setValue({ x: 0, y: 0 });
-        },
-        onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-          useNativeDriver: false,
-        }),
-        onPanResponderRelease: () => {
-          pan.flattenOffset();
-          const currentX = (pan.x as any)._value;
-          const currentY = (pan.y as any)._value;
-
-          // Clamp within screen boundaries
-          const clampedX = Math.max(8, Math.min(currentX, screenDim.width - HUB_SIZE - 12));
-          const clampedY = Math.max(48, Math.min(currentY, screenDim.height - HUB_SIZE - 40));
-
-          Animated.spring(pan, {
-            toValue: { x: clampedX, y: clampedY },
-            useNativeDriver: false,
-            friction: 7,
-          }).start();
-
-          lastOffsetRef.current = { x: clampedX, y: clampedY };
-          updateEdgeAffinity(clampedX);
-          setTimeout(() => {
-            isDraggingRef.current = false;
-          }, 150);
-        },
-      }),
-    [screenDim.width, screenDim.height]
-  );
-
-  const handleResetPosition = () => {
-    const pos = getDefaultPosition();
-    Animated.spring(pan, {
-      toValue: { x: pos.x, y: pos.y },
+    Animated.spring(expandAnim, {
+      toValue: isExpanded ? 1 : 0,
       useNativeDriver: false,
-      friction: 7,
+      friction: isExpanded ? 6 : 8,
+      tension: isExpanded ? 55 : 62,
     }).start();
-    lastOffsetRef.current = { x: pos.x, y: pos.y };
-    updateEdgeAffinity(pos.x);
-  };
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    if (isExpanded) {
+      collapseTimer.current = setTimeout(() => setIsExpanded(false), AUTO_COLLAPSE_MS);
+    }
+  }, [isExpanded, expandAnim]);
 
-  const targetMins = Math.max(1, dailyTargetMinutes);
-  const sessionMins = Math.floor(sessionElapsedSeconds / 60);
-  const currentTotalMins = todayBaseMinutes + sessionMins;
-  const percentComplete = Math.min(100, Math.round((currentTotalMins / targetMins) * 100));
-  const remainingMins = Math.max(0, targetMins - currentTotalMins);
-  const isGoalReached = currentTotalMins >= targetMins;
-
-  // Check for milestone crossings
-  useEffect(() => {
-    ReadingNotificationService.checkMilestoneCrossed(targetMins, currentTotalMins);
-  }, [currentTotalMins, targetMins]);
-
-  // Listen to in-app celebration notifications
-  useEffect(() => {
-    const unsub = ReadingNotificationService.subscribe(({ title, body }) => {
-      setCelebrationToast(`${title}: ${body}`);
-      setTimeout(() => {
-        setCelebrationToast(null);
-      }, 5000);
-    });
-    return unsub;
+  const keepPanelOpen = useCallback(() => {
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setIsExpanded(false), AUTO_COLLAPSE_MS);
   }, []);
 
-  const formatTime = (mins: number) => {
-    if (mins < 60) return `${mins}m`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    if (m === 0) return `${h} ${h === 1 ? 'hr' : 'hrs'}`;
-    return `${h}h ${m}m`;
-  };
-
-  const targetFormatted = targetMins >= 60 ? `${(targetMins / 60).toFixed(1)} hrs` : `${targetMins}m`;
-
-  // Interpolations for space-efficient orbital floating items
-  // When on left half: float card above (X: 0) and badges to the right (X: 64)
-  // When on right half: float card inward (X: -146) and badges to the left (X: -110)
-  const targetCardTranslateY = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -84],
-  });
-  const targetCardTranslateX = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, isRightHalf ? -146 : 0],
-  });
-  const targetCardOpacity = expandAnim;
-
-  // Session Stopwatch Badge
-  const sessionBadgeTranslateY = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -54],
-  });
-  const sessionBadgeTranslateX = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, isRightHalf ? -110 : 64],
-  });
-  const sessionBadgeOpacity = expandAnim;
-
-  // Pace / Status Badge
-  const paceBadgeTranslateY = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0],
-  });
-  const paceBadgeTranslateX = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, isRightHalf ? -110 : 64],
-  });
-  const paceBadgeOpacity = expandAnim;
-
-  // Space-efficient Mini Action Bar
-  const actionsTranslateY = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -122],
-  });
-  const actionsTranslateX = expandAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, isRightHalf ? -146 : 0],
-  });
-  const actionsOpacity = expandAnim;
-
-  const toggleExpand = () => {
-    if (!isDraggingRef.current) {
-      setIsExpanded((prev) => !prev);
+  const toggleExpanded = () => {
+    if (isDragging.current) return;
+    const now = Date.now();
+    if (now - lastTap.current < 320) {
+      lastTap.current = 0;
+      swapEdge();
+      return;
     }
+    lastTap.current = now;
+    setIsExpanded((prev) => !prev);
   };
+
+  const nudgeGoal = (deltaMinutes: number) => {
+    const next = Math.max(
+      MIN_GOAL_MINUTES,
+      Math.min(MAX_GOAL_MINUTES, targetMinutes + deltaMinutes)
+    );
+    if (next === targetMinutes) return;
+    keepPanelOpen();
+    onSaveGoals({ ...goals, dailyMinutes: next })
+      .then(() => showCelebration(`🎯 Daily target set to ${formatMinutes(next)}.`))
+      .catch(() => {});
+  };
+
+  const dockX = edge === 'right' ? -(PANEL_WIDTH - HUB_SIZE) : 0;
+  const panelTranslateX = expandAnim.interpolate({ inputRange: [0, 1], outputRange: [0, dockX] });
+  const panelTranslateY = expandAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -(panelHeight + 12)],
+  });
+  const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.6] });
+  const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
 
   return (
     <Animated.View
       pointerEvents="box-none"
-      style={[
-        styles.draggableWrapper,
-        {
-          transform: [{ translateX: pan.x }, { translateY: pan.y }],
-        },
-      ]}
+      style={[styles.wrapper, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}
     >
-      {/* Milestone Celebration Banner */}
-      {celebrationToast && (
-        <View style={styles.celebrationBanner} pointerEvents="auto">
-          <Sparkles size={16} color="#F59E0B" style={{ marginRight: 8 }} />
-          <Text numberOfLines={2} style={styles.celebrationText}>
-            {celebrationToast}
+      {Boolean(celebration) && !isExpanded && (
+        <View style={styles.celebration} pointerEvents="auto">
+          <Sparkles size={14} color={AppPalette.accentGold} style={styles.celebrationIcon} />
+          <Text numberOfLines={3} style={styles.celebrationText}>
+            {celebration}
           </Text>
         </View>
       )}
 
-      {/* ======================================================== */}
-      {/* FLOATING SATELLITE ITEMS (Radial Orbit around the Hub)  */}
-      {/* ======================================================== */}
-
-      {/* Quick Actions (Mini pill directly atop Target Card) */}
       <Animated.View
         pointerEvents={isExpanded ? 'auto' : 'none'}
+        onLayout={(event) => setPanelHeight(event.nativeEvent.layout.height)}
         style={[
-          styles.orbitalItem,
-          styles.orbitalActions,
+          styles.panel,
           {
-            opacity: actionsOpacity,
-            transform: [{ translateX: actionsTranslateX }, { translateY: actionsTranslateY }],
+            opacity: expandAnim,
+            transform: [{ translateX: panelTranslateX }, { translateY: panelTranslateY }],
           },
         ]}
       >
-        <TouchableOpacity
-          style={styles.actionPill}
-          onPress={handleResetPosition}
-          activeOpacity={0.7}
-        >
-          <RotateCcw size={11} color="#F472B6" style={{ marginRight: 4 }} />
-          <Text style={styles.actionPillText}>Snap</Text>
-        </TouchableOpacity>
-
-        {onClose && (
-          <TouchableOpacity
-            style={styles.actionPill}
-            onPress={onClose}
-            activeOpacity={0.7}
-          >
-            <X size={11} color="#9CA3AF" style={{ marginRight: 3 }} />
-            <Text style={styles.actionPillText}>Hide</Text>
-          </TouchableOpacity>
-        )}
-      </Animated.View>
-
-      {/* Satellite Item 1: Streamlined Target Progress Card (Above Hub) */}
-      <Animated.View
-        pointerEvents={isExpanded ? 'auto' : 'none'}
-        style={[
-          styles.orbitalItem,
-          styles.orbitalTargetCard,
-          {
-            opacity: targetCardOpacity,
-            transform: [{ translateX: targetCardTranslateX }, { translateY: targetCardTranslateY }],
-          },
-        ]}
-      >
-        <View style={styles.targetCardHeader}>
-          <View style={styles.targetCardHeaderLeft}>
-            <View style={[styles.targetIconBadge, isGoalReached && styles.targetIconBadgeComplete]}>
-              {isGoalReached ? (
-                <CheckCircle2 size={11} color="#10B981" />
-              ) : (
-                <Target size={11} color="#D84A6A" />
-              )}
-            </View>
-            <Text style={styles.targetCardTitle}>Daily Target</Text>
-          </View>
-          <Text style={[styles.targetCardPercent, isGoalReached && styles.targetCardPercentComplete]}>
-            {percentComplete}%
-          </Text>
+        <View style={styles.dragHandle} {...panHandlers}>
+          <View style={styles.dragBar} />
+          <Text style={styles.dragHint}>drag this bar to move · fling down to hide</Text>
         </View>
 
-        {/* Compact Progress Bar Track */}
-        <View style={styles.progressBarTrack}>
-          <View
-            style={[
-              styles.progressBarFill,
-              { width: `${percentComplete}%` },
-              isGoalReached && styles.progressBarFillComplete,
-            ]}
+        <View style={styles.panelHeader}>
+          <View style={[styles.panelBadge, isGoalReached && styles.panelBadgeComplete]}>
+            <Target size={12} color={accent} />
+          </View>
+          <Text style={styles.panelTitle}>Daily target</Text>
+          <Text style={[styles.panelPercent, { color: accent }]}>{percentComplete}%</Text>
+        </View>
+
+        <View style={styles.panelBody}>
+          <ProgressRing size={76} strokeWidth={6} progress={progress} color={accent}>
+            <Text style={styles.ringValue}>{totalMinutes}</Text>
+            <Text style={styles.ringUnit}>min read</Text>
+          </ProgressRing>
+
+          <View style={styles.statsColumn}>
+            <StatRow label="Goal" value={formatMinutes(targetMinutes)} />
+            <StatRow
+              label={isGoalReached ? 'Ahead by' : 'Remaining'}
+              value={
+                isGoalReached
+                  ? formatClock(totalSeconds - targetSeconds)
+                  : formatClock(remainingSeconds)
+              }
+              color={accent}
+            />
+            <StatRow label="Session" value={formatClock(sessionElapsedSeconds)} />
+          </View>
+        </View>
+
+        <View style={styles.adjustRow}>
+          <StepButton
+            label="−5 min"
+            onPress={() => nudgeGoal(-5)}
+            disabled={targetMinutes <= MIN_GOAL_MINUTES}
+          />
+          <View style={styles.adjustCenter}>
+            <Gauge size={12} color={AppPalette.textMuted} style={styles.adjustIcon} />
+            <Text style={styles.adjustText}>{isGoalReached ? 'Target met' : 'Keep going'}</Text>
+          </View>
+          <StepButton
+            label="+5 min"
+            onPress={() => nudgeGoal(5)}
+            disabled={targetMinutes >= MAX_GOAL_MINUTES}
           />
         </View>
 
-        <View style={styles.targetCardNumbers}>
-          <Text style={styles.targetNumbersText}>
-            {formatTime(currentTotalMins)} / {targetFormatted}
-          </Text>
-          <Text style={[styles.targetStatusText, isGoalReached && { color: '#10B981' }]}>
-            {isGoalReached ? 'Complete 🎉' : `${remainingMins}m left`}
-          </Text>
+        <View style={styles.panelFooter}>
+          <PanelAction
+            icon={<Pencil size={11} color={AppPalette.textSecondary} />}
+            label="Edit goal"
+            onPress={() => {
+              setIsExpanded(false);
+              setIsGoalModalVisible(true);
+            }}
+          />
+          <PanelAction
+            icon={<Crosshair size={11} color={AppPalette.textSecondary} />}
+            label={`Move ${edge === 'right' ? 'left' : 'right'}`}
+            onPress={() => {
+              swapEdge();
+              keepPanelOpen();
+            }}
+          />
+          {onClose && (
+            <PanelAction
+              icon={<EyeOff size={11} color={AppPalette.textSecondary} />}
+              label="Hide"
+              onPress={onClose}
+            />
+          )}
         </View>
       </Animated.View>
 
-      {/* Satellite Item 2: Active Session Stopwatch Badge (Upper Right) */}
-      <Animated.View
-        pointerEvents={isExpanded ? 'auto' : 'none'}
-        style={[
-          styles.orbitalItem,
-          styles.orbitalPill,
-          {
-            opacity: sessionBadgeOpacity,
-            transform: [{ translateX: sessionBadgeTranslateX }, { translateY: sessionBadgeTranslateY }],
-          },
-        ]}
-      >
-        <Clock size={12} color="#F59E0B" style={{ marginRight: 5 }} />
-        <Text style={styles.orbitalPillText}>
-          <Text style={styles.orbitalPillHighlight}>{sessionMins}m</Text> session
-        </Text>
-      </Animated.View>
-
-      {/* Satellite Item 3: Pace & Streak Badge (Directly Right) */}
-      <Animated.View
-        pointerEvents={isExpanded ? 'auto' : 'none'}
-        style={[
-          styles.orbitalItem,
-          styles.orbitalPill,
-          {
-            opacity: paceBadgeOpacity,
-            transform: [{ translateX: paceBadgeTranslateX }, { translateY: paceBadgeTranslateY }],
-          },
-        ]}
-      >
-        <Flame size={12} color={isGoalReached ? '#10B981' : '#D84A6A'} style={{ marginRight: 5 }} />
-        <Text style={styles.orbitalPillText}>
-          <Text style={[styles.orbitalPillHighlight, isGoalReached && { color: '#10B981' }]}>
-            {isGoalReached ? 'Done!' : 'On Track'}
-          </Text>
-        </Text>
-      </Animated.View>
-
-      {/* ======================================================== */}
-      {/* THE CENTRAL CIRCULAR TIME HUB WIDGET (Draggable)          */}
-      {/* ======================================================== */}
-      <View {...panResponder.panHandlers}>
-        <TouchableOpacity
-          style={[
-            styles.circularHub,
-            isGoalReached && styles.circularHubComplete,
-            isExpanded && styles.circularHubExpanded,
-          ]}
-          onPress={toggleExpand}
-          activeOpacity={0.85}
-        >
-          {isExpanded ? (
-            <X size={22} color="#FFFFFF" />
-          ) : (
-            <View style={styles.hubInnerContent}>
-              <View style={styles.hubIconRow}>
-                {isGoalReached ? (
-                  <CheckCircle2 size={16} color="#10B981" />
-                ) : (
-                  <Target size={16} color="#D84A6A" />
-                )}
-              </View>
-              <Text style={[styles.hubTimeText, isGoalReached && styles.hubTimeTextComplete]}>
-                {formatTime(currentTotalMins)}
-              </Text>
-            </View>
+      <View {...panHandlers}>
+        <Animated.View style={{ transform: [{ scale: pressScale }] }}>
+          {isGoalReached && !isExpanded && (
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.pulseRing, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
+            />
           )}
-
-          {/* Glowing pulse ring if goal reached */}
-          {isGoalReached && <View style={styles.goalGlowRing} pointerEvents="none" />}
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.hub, isGoalReached && styles.hubComplete]}
+            onPress={toggleExpanded}
+            onLongPress={() => {
+              if (!isDragging.current) setIsGoalModalVisible(true);
+            }}
+            delayLongPress={380}
+            onPressIn={pressIn}
+            onPressOut={releasePress}
+            activeOpacity={1}
+            accessibilityLabel={
+              isExpanded ? 'Collapse daily target panel' : 'Expand daily target panel'
+            }
+            accessibilityHint="Tap to expand, drag to move, double tap to swap sides, long press to edit the goal"
+          >
+            {isExpanded ? (
+              <Text style={styles.hubClose}>×</Text>
+            ) : (
+              <ProgressRing size={HUB_SIZE - 8} strokeWidth={3} progress={progress} color={accent}>
+                <Text style={[styles.hubMinutes, isGoalReached && styles.hubMinutesComplete]}>
+                  {totalMinutes}
+                </Text>
+                <Text style={styles.hubUnit}>min</Text>
+              </ProgressRing>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
       </View>
+
+      <GoalSettingsModal
+        visible={isGoalModalVisible}
+        currentGoals={goals}
+        onClose={() => setIsGoalModalVisible(false)}
+        onSave={async (newGoals) => {
+          await onSaveGoals(newGoals);
+          setIsGoalModalVisible(false);
+          showCelebration(`🎯 Target updated to ${formatMinutes(newGoals.dailyMinutes)}.`);
+        }}
+      />
     </Animated.View>
   );
 }
 
+function StatRow({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <View style={styles.statRow}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={[styles.statValue, color && { color }]} numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function StepButton({
+  label,
+  onPress,
+  disabled,
+}: {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.stepButton, disabled && styles.stepButtonDisabled]}
+      onPress={onPress}
+      activeOpacity={0.7}
+      disabled={disabled}
+    >
+      <Text style={[styles.stepButtonText, disabled && styles.stepButtonTextDisabled]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function PanelAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.panelAction} onPress={onPress} activeOpacity={0.7}>
+      {icon}
+      <Text style={styles.panelActionText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
-  draggableWrapper: {
+  wrapper: {
     position: 'absolute',
     top: 0,
     left: 0,
     zIndex: 1000,
   },
-  celebrationBanner: {
+  celebration: {
     position: 'absolute',
-    bottom: 74,
+    bottom: HUB_SIZE + 14,
     left: 0,
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E1B2E',
+    alignItems: 'flex-start',
+    width: 250,
+    backgroundColor: AppPalette.surfaceElevated,
     borderWidth: 1,
-    borderColor: '#F59E0B',
+    borderColor: 'rgba(217, 119, 6, 0.45)',
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    width: 260,
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 1010,
-  },
-  celebrationText: {
-    fontSize: 12,
-    color: '#FDE68A',
-    fontWeight: '600',
-    flex: 1,
-    lineHeight: 16,
-  },
-
-  /* Circular Time Hub */
-  circularHub: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#16181D',
-    borderWidth: 2,
-    borderColor: 'rgba(216, 74, 106, 0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.45,
     shadowRadius: 10,
     elevation: 10,
   },
-  circularHubComplete: {
-    borderColor: 'rgba(16, 185, 129, 0.7)',
-    backgroundColor: '#141E19',
+  celebrationIcon: {
+    marginRight: 8,
+    marginTop: 2,
   },
-  circularHubExpanded: {
-    backgroundColor: '#262933',
-    borderColor: '#FFFFFF',
-    transform: [{ scale: 1.05 }],
+  celebrationText: {
+    flex: 1,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: '#FDE68A',
+    fontWeight: '600',
   },
-  hubInnerContent: {
+
+  pulseRing: {
+    position: 'absolute',
+    width: HUB_SIZE + 14,
+    height: HUB_SIZE + 14,
+    top: -7,
+    left: -7,
+    borderRadius: (HUB_SIZE + 14) / 2,
+    borderWidth: 2,
+    borderColor: AppPalette.accentGreen,
+  },
+  hub: {
+    width: HUB_SIZE,
+    height: HUB_SIZE,
+    borderRadius: HUB_SIZE / 2,
+    backgroundColor: 'rgba(13, 14, 17, 0.92)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  hubComplete: {
+    borderColor: 'rgba(16, 185, 129, 0.5)',
+  },
+  hubMinutes: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: AppPalette.textPrimary,
+    letterSpacing: -0.4,
+    fontFamily: SERIF,
+  },
+  hubMinutesComplete: {
+    color: AppPalette.accentGreen,
+  },
+  hubUnit: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: AppPalette.textMuted,
+    letterSpacing: 0.6,
+    marginTop: -1,
+  },
+  hubClose: {
+    fontSize: 26,
+    lineHeight: 28,
+    color: AppPalette.textPrimary,
+    fontWeight: '400',
+  },
+
+  panel: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: PANEL_WIDTH,
+    backgroundColor: 'rgba(13, 14, 17, 0.97)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    borderRadius: 18,
+    padding: 14,
+    paddingTop: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    elevation: 14,
+  },
+  dragHandle: {
+    alignItems: 'center',
+    marginBottom: 6,
+    paddingVertical: 6,
+  },
+  dragBar: {
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+  },
+  dragHint: {
+    marginTop: 4,
+    fontSize: 8.5,
+    letterSpacing: 0.3,
+    color: AppPalette.textMuted,
+    textAlign: 'center',
+  },
+  panelHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  panelBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(216, 74, 106, 0.14)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  panelBadgeComplete: {
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+  },
+  panelTitle: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: AppPalette.textPrimary,
+  },
+  panelPercent: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
+  panelBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  ringValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: AppPalette.textPrimary,
+    letterSpacing: -0.8,
+    fontFamily: SERIF,
+  },
+  ringUnit: {
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: AppPalette.textMuted,
+    letterSpacing: 0.7,
+    marginTop: -2,
+  },
+  statsColumn: {
+    flex: 1,
+    marginLeft: 14,
+    gap: 7,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  statLabel: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: AppPalette.textMuted,
+  },
+  statValue: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: AppPalette.textSecondary,
+    maxWidth: 110,
+  },
+  adjustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    gap: 6,
+  },
+  stepButton: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 9,
+    backgroundColor: 'rgba(216, 74, 106, 0.13)',
+    borderWidth: 1,
+    borderColor: 'rgba(216, 74, 106, 0.28)',
+  },
+  stepButtonDisabled: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  stepButtonText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AppPalette.accentBerry,
+  },
+  stepButtonTextDisabled: {
+    color: AppPalette.textMuted,
+  },
+  adjustCenter: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hubIconRow: {
-    marginBottom: 1,
+  adjustIcon: {
+    marginRight: 5,
   },
-  hubTimeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#E5E7EB',
-    letterSpacing: 0.2,
+  adjustText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: AppPalette.textSecondary,
   },
-  hubTimeTextComplete: {
-    color: '#10B981',
-  },
-  goalGlowRing: {
-    position: 'absolute',
-    top: -4,
-    left: -4,
-    right: -4,
-    bottom: -4,
-    borderRadius: 33,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-  },
-
-  /* Orbital Floating Items */
-  orbitalItem: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-  },
-  orbitalActions: {
+  panelFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    width: 200,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.07)',
   },
-  actionPill: {
+  panelAction: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(22, 24, 29, 0.95)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
-  },
-  actionPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#E5E7EB',
-  },
-
-  /* Orbital Card 1: Target Card (Slim & Compact) */
-  orbitalTargetCard: {
-    width: 204,
-    backgroundColor: 'rgba(22, 24, 29, 0.96)',
-    borderWidth: 1,
-    borderColor: 'rgba(216, 74, 106, 0.35)',
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.45,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  targetCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 5,
-  },
-  targetCardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  targetIconBadge: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: 'rgba(216, 74, 106, 0.15)',
     justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 6,
-  },
-  targetIconBadgeComplete: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  targetCardTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  targetCardPercent: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#D84A6A',
-  },
-  targetCardPercentComplete: {
-    color: '#10B981',
-  },
-  progressBarTrack: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    overflow: 'hidden',
-    marginBottom: 5,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 2,
-    backgroundColor: '#D84A6A',
-  },
-  progressBarFillComplete: {
-    backgroundColor: '#10B981',
-  },
-  targetCardNumbers: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  targetNumbersText: {
-    fontSize: 10,
-    color: '#9CA3AF',
-    fontWeight: '600',
-  },
-  targetStatusText: {
-    fontSize: 10,
-    color: '#D84A6A',
-    fontWeight: '700',
-  },
-
-  /* Orbital Pills 2 & 3 (Compact Status Badges) */
-  orbitalPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(22, 24, 29, 0.95)',
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: AppPalette.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    elevation: 6,
-    alignSelf: 'flex-start',
+    borderColor: 'rgba(255,255,255,0.07)',
+    gap: 4,
   },
-  orbitalPillText: {
-    fontSize: 10,
-    color: '#9CA3AF',
-    fontWeight: '600',
-  },
-  orbitalPillHighlight: {
-    color: '#FFFFFF',
+  panelActionText: {
+    fontSize: 9.5,
     fontWeight: '700',
+    color: AppPalette.textSecondary,
   },
 });
