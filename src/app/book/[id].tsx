@@ -25,10 +25,11 @@ import {
   StickyNote,
   Tag
 } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Modal,
   Platform,
   Pressable,
@@ -39,6 +40,52 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+function BookDetailSkeleton() {
+  const pulse = useRef(new Animated.Value(0.55)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 850, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 850, useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <View style={styles.navBar}>
+        <View style={[styles.skelBase, styles.navBtn]} />
+        <View style={[styles.skelBase, { height: 14, width: '42%', borderRadius: 7 }]} />
+        <View style={[styles.skelBase, styles.navBtn]} />
+      </View>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: pulse }}>
+          <View style={styles.heroSection}>
+            <View style={[styles.skelBase, { width: 156, height: 228, borderRadius: 8 }]} />
+            <View style={[styles.skelBase, { height: 24, width: '68%', borderRadius: 7, marginTop: 18 }]} />
+            <View style={[styles.skelBase, { height: 14, width: '38%', borderRadius: 7, marginTop: 10 }]} />
+            <View style={[styles.skelBase, { height: 26, width: '58%', borderRadius: 13, marginTop: 16 }]} />
+          </View>
+          {[0, 1, 2].map((i) => (
+            <View key={i} style={styles.card}>
+              <View style={styles.skelCardHeader}>
+                <View style={[styles.skelBase, { height: 15, width: '46%', borderRadius: 7 }]} />
+                <View style={[styles.skelBase, { height: 20, width: 84, borderRadius: 6 }]} />
+              </View>
+              <View style={[styles.skelBase, { height: 7, width: '100%', borderRadius: 4, marginBottom: 6 }]} />
+              <View style={[styles.skelBase, { height: 7, width: '72%', borderRadius: 4, marginBottom: 14 }]} />
+              <View style={[styles.skelBase, { height: 38, width: '100%', borderRadius: 12 }]} />
+            </View>
+          ))}
+        </Animated.View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
 export default function BookDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -1191,6 +1238,15 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 2,
+    marginBottom: 14,
+  },
+  skelBase: {
+    backgroundColor: '#1F222A',
+  },
+  skelCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 14,
   },
   cardHeader: {
