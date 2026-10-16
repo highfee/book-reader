@@ -14,6 +14,21 @@ import {
   Shelf,
 } from '@/types/book';
 
+export const DEFAULT_SHELVES: {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  isDefault: boolean;
+}[] = [
+  { id: 'shelf_favorites', name: 'Favorites', icon: 'heart', color: '#EF4444', isDefault: true },
+  { id: 'shelf_want_to_read', name: 'Want to Read', icon: 'bookmark', color: '#F59E0B', isDefault: true },
+  { id: 'shelf_philosophy', name: 'Philosophy', icon: 'compass', color: '#10B981', isDefault: false },
+  { id: 'shelf_classics', name: 'Classics', icon: 'book', color: '#8B5CF6', isDefault: false },
+];
+
+let defaultShelvesSeeded = false;
+
 export class BookRepository {
   /**
    * Fetch all books with their reading progress, optionally applying status, genre, and search filters.
@@ -610,6 +625,8 @@ export class BookRepository {
 
   static async getShelves(): Promise<Shelf[]> {
     const db = await DatabaseService.getDatabase();
+    await this.seedDefaultShelves();
+
     let rows: any[] = [];
     try {
       rows = await db.getAllAsync<any>(
@@ -624,12 +641,12 @@ export class BookRepository {
     }
 
     if (!rows || rows.length === 0) {
-      return [
-        { id: 'shelf_favorites', name: 'Favorites', icon: 'heart', color: '#EF4444', isDefault: true, bookCount: 0, createdAt: new Date().toISOString() },
-        { id: 'shelf_want_to_read', name: 'Want to Read', icon: 'bookmark', color: '#F59E0B', isDefault: true, bookCount: 0, createdAt: new Date().toISOString() },
-        { id: 'shelf_philosophy', name: 'Philosophy', icon: 'compass', color: '#10B981', isDefault: false, bookCount: 0, createdAt: new Date().toISOString() },
-        { id: 'shelf_classics', name: 'Classics', icon: 'book', color: '#8B5CF6', isDefault: false, bookCount: 0, createdAt: new Date().toISOString() },
-      ];
+      return DEFAULT_SHELVES.map((s) => ({
+        ...s,
+        isDefault: true,
+        bookCount: 0,
+        createdAt: new Date().toISOString(),
+      }));
     }
     return rows.map((r: any) => ({
       id: r.id,
@@ -640,6 +657,25 @@ export class BookRepository {
       bookCount: Number(r.bookCount ?? r.book_count ?? 0),
       createdAt: r.createdAt ?? r.created_at,
     }));
+  }
+
+  /**
+   * The built-in shelves must be real rows, otherwise assigning a book to them
+   * violates the book_shelves foreign key and the write fails silently.
+   */
+  static async seedDefaultShelves(): Promise<void> {
+    if (defaultShelvesSeeded) return;
+    const db = await DatabaseService.getDatabase();
+    const now = new Date().toISOString();
+    for (const shelf of DEFAULT_SHELVES) {
+      await db
+        .runAsync(
+          `INSERT OR IGNORE INTO shelves (id, name, icon, color, is_default, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+          [shelf.id, shelf.name, shelf.icon, shelf.color, shelf.isDefault ? 1 : 0, now]
+        )
+        .catch(() => {});
+    }
+    defaultShelvesSeeded = true;
   }
 
   static async createShelf(shelf: { name: string; icon?: string; color?: string }): Promise<Shelf> {
@@ -674,6 +710,7 @@ export class BookRepository {
 
   static async setBookShelves(bookId: string, shelfIds: string[]): Promise<void> {
     const db = await DatabaseService.getDatabase();
+    await this.seedDefaultShelves();
     await db.runAsync(`DELETE FROM book_shelves WHERE book_id = ?`, [bookId]);
     const now = new Date().toISOString();
     for (const sId of shelfIds) {

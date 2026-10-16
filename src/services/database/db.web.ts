@@ -258,20 +258,22 @@ class WebSQLiteMock {
       return { changes: 1 };
     }
 
-    // 9. Shelves insert
-    if (cleanSql.includes('INSERT INTO SHELVES')) {
+    // 9. Shelves insert (also matches INSERT OR IGNORE INTO shelves)
+    if (cleanSql.includes('INTO SHELVES')) {
       const flatParams = Array.isArray(params[0]) ? params[0] : params;
       const id = flatParams[0];
       if (!data.shelves) data.shelves = getDefaultShelves();
-      data.shelves[id] = {
-        id,
-        name: flatParams[1],
-        icon: flatParams[2],
-        color: flatParams[3],
-        is_default: flatParams[4] ? 1 : 0,
-        created_at: flatParams[5],
-      };
-      saveWebData(data);
+      if (!data.shelves[id]) {
+        data.shelves[id] = {
+          id,
+          name: flatParams[1],
+          icon: flatParams[2],
+          color: flatParams[3],
+          is_default: flatParams[4] ? 1 : 0,
+          created_at: flatParams[5],
+        };
+        saveWebData(data);
+      }
       return { changes: 1 };
     }
 

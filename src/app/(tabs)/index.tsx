@@ -94,6 +94,11 @@ export default function LibraryScreen() {
     }
   };
 
+  /** Shelf membership changed: refresh chip counts and the filtered book grid. */
+  const refreshShelfAssignments = async () => {
+    await Promise.all([loadShelves(), loadBooks()]);
+  };
+
   useEffect(() => {
     initialize();
     loadShelves();
@@ -1213,10 +1218,10 @@ export default function LibraryScreen() {
         <AddToShelfModal
           visible={Boolean(shelfTargetBook)}
           book={shelfTargetBook}
+          onShelvesUpdated={refreshShelfAssignments}
           onClose={() => {
             setShelfTargetBook(null);
-            loadShelves();
-            loadBooks();
+            refreshShelfAssignments();
           }}
         />
       )}

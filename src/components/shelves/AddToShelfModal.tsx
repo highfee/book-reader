@@ -42,6 +42,7 @@ export const AddToShelfModal: React.FC<AddToShelfModalProps> = ({
   const [selectedShelfIds, setSelectedShelfIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadShelvesAndAssignments = async () => {
     if (!book) return;
@@ -68,16 +69,18 @@ export const AddToShelfModal: React.FC<AddToShelfModalProps> = ({
 
   const handleToggleShelf = async (shelfId: string) => {
     if (!book || saving) return;
+    const updated = selectedShelfIds.includes(shelfId)
+      ? selectedShelfIds.filter((id) => id !== shelfId)
+      : [...selectedShelfIds, shelfId];
     try {
       setSaving(true);
-      const updated = selectedShelfIds.includes(shelfId)
-        ? selectedShelfIds.filter((id) => id !== shelfId)
-        : [...selectedShelfIds, shelfId];
-      setSelectedShelfIds(updated);
+      setError(null);
       await BookRepository.setBookShelves(book.id, updated);
-      if (onShelvesUpdated) onShelvesUpdated();
-    } catch (err) {
-      console.error('Failed to update shelf assignment:', err);
+      setSelectedShelfIds(updated);
+      onShelvesUpdated?.();
+    } catch (err: any) {
+      setError(err?.message || 'Could not update shelves');
+      await loadShelvesAndAssignments();
     } finally {
       setSaving(false);
     }
@@ -110,6 +113,11 @@ export const AddToShelfModal: React.FC<AddToShelfModalProps> = ({
           </View>
 
           {/* Shelves List */}
+          {error && (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
           {loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#D97706" />
@@ -234,6 +242,20 @@ const styles = StyleSheet.create({
   loadingContainer: {
     paddingVertical: 36,
     alignItems: 'center',
+  },
+  errorBanner: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(239, 68, 68, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#FCA5A5',
+    fontWeight: '600',
   },
   loadingText: {
     marginTop: 8,
