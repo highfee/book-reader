@@ -18,7 +18,6 @@ import {
   RefreshCw,
   Trash2,
   ShieldCheck,
-  Cpu,
   Info,
   ChevronRight,
   Cloud,
@@ -32,6 +31,8 @@ import {
   AlertTriangle,
   Sparkles,
 } from 'lucide-react-native';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useLibraryStore } from '@/stores/useLibraryStore';
 import { useReadingStore } from '@/stores/useReadingStore';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -183,14 +184,30 @@ export default function SettingsScreen() {
       }
 
       const jsonStr = JSON.stringify(exportData, null, 2);
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const fileName = `lumina-reader-notes-${new Date().toISOString().slice(0, 10)}.json`;
+      if (Platform.OS === 'web') {
+        if (typeof document === 'undefined') {
+          throw new Error('Export is not supported in this environment');
+        }
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `lumina-reader-notes-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = fileName;
         a.click();
         URL.revokeObjectURL(url);
+      } else {
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+        await FileSystem.writeAsStringAsync(fileUri, jsonStr);
+        if (!(await Sharing.isAvailableAsync())) {
+          Alert.alert('Export Unavailable', 'Sharing is not available on this device.');
+          return;
+        }
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'application/json',
+          dialogTitle: 'Export Notes & Highlights',
+          UTI: 'public.json',
+        });
       }
       setExportSuccessMsg(
         `Exported ${exportData.reduce((acc, b) => acc + b.notesCount, 0)} notes across ${exportData.length} books.`
@@ -212,7 +229,7 @@ export default function SettingsScreen() {
         {/* Reset Success Toast */}
         {resetSuccess && (
           <View style={styles.successBanner}>
-            <Check size={16} color="#059669" style={{ marginRight: 8 }} />
+            <Check size={16} color="#10B981" style={{ marginRight: 8 }} />
             <Text style={styles.successBannerText}>
               Local database index has been completely reset and reinitialized.
             </Text>
@@ -221,9 +238,9 @@ export default function SettingsScreen() {
 
         {/* Export Success Toast */}
         {exportSuccessMsg && (
-          <View style={[styles.successBanner, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}>
-            <Download size={16} color="#16A34A" style={{ marginRight: 8 }} />
-            <Text style={[styles.successBannerText, { color: '#15803D' }]}>{exportSuccessMsg}</Text>
+          <View style={[styles.successBanner, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981' }]}>
+            <Download size={16} color="#10B981" style={{ marginRight: 8 }} />
+            <Text style={styles.successBannerText}>{exportSuccessMsg}</Text>
           </View>
         )}
 
@@ -335,8 +352,8 @@ export default function SettingsScreen() {
         <Text style={styles.sectionHeader}>AI COMPANION & PERSONAS</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <View style={[styles.iconCircle, { backgroundColor: '#FDF2F8' }]}>
-              <Sparkles size={20} color="#D97706" />
+            <View style={[styles.iconCircle, { backgroundColor: 'rgba(216, 74, 106, 0.15)' }]}>
+              <Sparkles size={20} color="#D84A6A" />
             </View>
             <View style={styles.rowText}>
               <Text style={styles.rowTitle}>Gemini AI Reading Companion</Text>
@@ -356,7 +373,7 @@ export default function SettingsScreen() {
                 { id: 'companion', label: 'Companion', desc: 'Warm & reflective chat' },
                 { id: 'scholar', label: 'Scholar', desc: 'Literary & historical depth' },
               ].map((p) => {
-                const isSelected = (aiPersona === p.id) || (aiPersona === 'bookclub' && p.id === 'companion');
+                const isSelected = aiPersona === p.id;
                 return (
                   <TouchableOpacity
                     key={p.id}
@@ -408,7 +425,7 @@ export default function SettingsScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Key size={14} color="#D97706" style={{ marginRight: 6 }} />
-                <Text style={{ fontSize: 13, fontWeight: '600', color: '#1E293B' }}>
+                <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFFFFF' }}>
                   Gemini API Key (Optional)
                 </Text>
               </View>
@@ -440,15 +457,15 @@ export default function SettingsScreen() {
                 </TouchableOpacity>
               </View>
             ) : (
-              <Text style={{ fontSize: 12, color: apiKey ? '#059669' : '#64748B' }}>
+              <Text style={{ fontSize: 12, color: apiKey ? '#10B981' : '#9CA3AF' }}>
                 {apiKey ? '✓ Custom Gemini API Key configured' : 'Using smart offline companion fallback'}
               </Text>
             )}
           </View>
 
           {/* Model Selector */}
-          <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-            <Text style={{ fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 8 }}>
+          <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: 'rgba(255, 255, 255, 0.08)' }}>
+            <Text style={{ fontSize: 12, fontWeight: '600', color: '#9CA3AF', marginBottom: 8 }}>
               Active Gemini Model
             </Text>
             <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
@@ -504,7 +521,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <TouchableOpacity style={styles.actionRow} onPress={handleExportNotes}>
             <View style={styles.row}>
-              <View style={[styles.iconCircle, { backgroundColor: '#FEF3C7' }]}>
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(217, 119, 6, 0.15)' }]}>
                 <Download size={20} color="#D97706" />
               </View>
               <View style={styles.rowText}>
@@ -526,8 +543,8 @@ export default function SettingsScreen() {
             onPress={() => setShowAuthModal(true)}
           >
             <View style={styles.row}>
-              <View style={[styles.iconCircle, { backgroundColor: '#EEF2FF' }]}>
-                <Cloud size={20} color="#4F46E5" />
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                <Cloud size={20} color="#38BDF8" />
               </View>
               <View style={styles.rowText}>
                 <Text style={styles.rowTitle}>
@@ -589,7 +606,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionHeader}>PRIVACY & SECURITY</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <View style={[styles.iconCircle, { backgroundColor: '#ECFDF5' }]}>
+            <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
               <ShieldCheck size={20} color="#10B981" />
             </View>
             <View style={styles.rowText}>
@@ -602,14 +619,14 @@ export default function SettingsScreen() {
         </View>
 
         {/* Danger Zone */}
-        <Text style={[styles.sectionHeader, { color: '#DC2626' }]}>DANGER ZONE</Text>
+        <Text style={[styles.sectionHeader, { color: '#D84A6A' }]}>DANGER ZONE</Text>
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.dangerRow}
             onPress={() => setShowResetModal(true)}
             activeOpacity={0.7}
           >
-            <Trash2 size={18} color="#DC2626" style={{ marginRight: 10 }} />
+            <Trash2 size={18} color="#D84A6A" style={{ marginRight: 10 }} />
             <Text style={styles.dangerText}>Reset Local Database Index</Text>
           </TouchableOpacity>
         </View>
@@ -639,7 +656,7 @@ export default function SettingsScreen() {
         >
           <Pressable style={styles.modalDialog} onPress={(e) => e.stopPropagation()}>
             <View style={styles.resetModalIconWrapper}>
-              <AlertTriangle size={28} color="#DC2626" />
+              <AlertTriangle size={28} color="#D84A6A" />
             </View>
 
             <Text style={styles.resetModalTitle}>Reset Local Database?</Text>
@@ -754,7 +771,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -848,7 +865,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#D97706',
   },
   toggleTrackInactive: {
-    backgroundColor: '#D6D3D1',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
   },
   toggleThumb: {
     width: 20,
@@ -874,17 +891,17 @@ const styles = StyleSheet.create({
     color: '#D97706',
   },
   keyInput: {
-    backgroundColor: '#F5F5F4',
+    backgroundColor: '#1F222A',
     borderRadius: 10,
     paddingHorizontal: 12,
     height: 42,
     fontSize: 13,
-    color: '#1C1917',
+    color: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: 'transparent',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   keyInputFocused: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1F222A',
     borderColor: '#D97706',
     shadowColor: '#D97706',
     shadowOffset: { width: 0, height: 0 },
@@ -893,7 +910,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   saveKeyBtn: {
-    backgroundColor: '#1C1917',
+    backgroundColor: '#D84A6A',
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
@@ -911,7 +928,7 @@ const styles = StyleSheet.create({
   dangerText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#DC2626',
+    color: '#D84A6A',
   },
   versionWrapper: {
     flexDirection: 'row',
@@ -921,12 +938,12 @@ const styles = StyleSheet.create({
   },
   versionText: {
     fontSize: 12,
-    color: '#A8A29E',
+    color: '#9CA3AF',
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(28, 25, 23, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -934,13 +951,15 @@ const styles = StyleSheet.create({
   modalDialog: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#16181D',
     borderRadius: 18,
     padding: 22,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.35,
     shadowRadius: 20,
     elevation: 8,
   },
@@ -948,7 +967,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: 'rgba(216, 74, 106, 0.15)',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
@@ -956,28 +975,30 @@ const styles = StyleSheet.create({
   resetModalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1C1917',
+    color: '#FFFFFF',
     marginBottom: 8,
     textAlign: 'center',
     fontFamily: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia, serif' }),
   },
   resetModalDescription: {
     fontSize: 13,
-    color: '#57534E',
+    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 14,
   },
   resetNoticeBox: {
-    backgroundColor: '#F5F5F4',
+    backgroundColor: '#1F222A',
     borderRadius: 10,
     padding: 10,
     width: '100%',
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   resetNoticeText: {
     fontSize: 11,
-    color: '#78716C',
+    color: '#9CA3AF',
     textAlign: 'center',
   },
   modalActionsRow: {
@@ -989,21 +1010,21 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#F5F5F4',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E7E5E4',
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   cancelBtnText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#57534E',
+    color: '#FFFFFF',
   },
   confirmResetBtn: {
     flex: 1.2,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#D84A6A',
     alignItems: 'center',
   },
   confirmResetBtnText: {

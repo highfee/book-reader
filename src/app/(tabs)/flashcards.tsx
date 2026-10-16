@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,15 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Image } from 'expo-image';
 import {
   GraduationCap,
   Sparkles,
   Play,
   RotateCw,
-  Plus,
   BookOpen,
-  Calendar,
   Layers,
-  CheckCircle2,
   Bookmark,
   Heart,
   Book,
@@ -37,7 +34,7 @@ import { Flashcard, BookWithProgress, Shelf } from '@/types/book';
 import { FlashcardReviewModal } from '@/components/flashcards/FlashcardReviewModal';
 import { ManageShelvesModal } from '@/components/shelves/ManageShelvesModal';
 import { inferBookTitle, inferBookAuthor } from '@/services/parsers/titleInference';
-import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
+import { AppPalette } from '@/constants/theme';
 
 interface BookDeck {
   bookId: string;
@@ -135,9 +132,11 @@ export default function FlashcardsScreen() {
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -219,10 +218,7 @@ export default function FlashcardsScreen() {
       </View>
 
       {/* Segmented Controller: Shelves & Collections vs Recall Decks */}
-      <HorizontalScroll
-        style={styles.segmentedScroll}
-        contentContainerStyle={styles.segmentedRow}
-      >
+      <View style={styles.segmentedRow}>
         <TouchableOpacity
           style={[styles.segmentBtn, activeTab === 'shelves' && styles.segmentBtnActive]}
           onPress={() => {
@@ -247,7 +243,7 @@ export default function FlashcardsScreen() {
             Active Recall ({allCards.length})
           </Text>
         </TouchableOpacity>
-      </HorizontalScroll>
+      </View>
 
       {loading ? (
         <View style={styles.centerLoading}>
@@ -693,14 +689,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  segmentedScroll: {
-    flexGrow: 0,
-    marginHorizontal: 20,
-    marginBottom: 14,
-  },
   segmentedRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 14,
     padding: 3,
     backgroundColor: '#16181D',
     borderRadius: 14,
@@ -709,11 +702,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   segmentBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderRadius: 11,
   },
   segmentBtnActive: {
@@ -941,7 +934,7 @@ const styles = StyleSheet.create({
     height: 58,
     borderRadius: 6,
     overflow: 'hidden',
-    backgroundColor: '#1E293B',
+    backgroundColor: AppPalette.surfaceElevated,
     marginRight: 12,
   },
   shelfBookCover: {
@@ -953,7 +946,7 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1C1917',
+    backgroundColor: AppPalette.surface,
   },
   shelfBookDetails: {
     flex: 1,

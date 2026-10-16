@@ -34,6 +34,7 @@ import { ReadingHeatmap } from '@/components/stats/ReadingHeatmap';
 import { GoalSettingsModal } from '@/components/stats/GoalSettingsModal';
 import { NotificationReminderModal } from '@/components/stats/NotificationReminderModal';
 import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
+import { ProgressBar } from '@/components/ui/ProgressBar';
 import { AppPalette } from '@/constants/theme';
 
 const SECTIONS = ['ALL', 'TARGETS', 'HEATMAP', 'METRICS', 'HONORS'] as const;
@@ -112,6 +113,7 @@ export default function StatsScreen() {
   const isDailyGoalMet = todayMinutes >= dailyTargetMins;
 
   // Yearly progress calculation
+  const currentYear = new Date().getFullYear();
   const yearlyTargetBooks = goals.yearlyBooks || 12;
   const completedBooks = stats?.completedBooks || 0;
   const yearlyProgressPercent = Math.min(100, Math.round((completedBooks / yearlyTargetBooks) * 100));
@@ -250,15 +252,15 @@ export default function StatsScreen() {
             />
           }
         >
-          {/* Zero-State Library Guide if database reset / no books */}
+          {/* Empty state when the library has no books */}
           {stats?.totalBooks === 0 && (
             <View style={styles.zeroStateCard}>
               <View style={styles.zeroStateIconRow}>
                 <Sparkles size={18} color="#D84A6A" style={{ marginRight: 8 }} />
-                <Text style={styles.zeroStateTitle}>Database Reset • Clean Canvas</Text>
+                <Text style={styles.zeroStateTitle}>No Reading Activity Yet</Text>
               </View>
               <Text style={styles.zeroStateSub}>
-                All mock reading sessions have been cleared. As you import and read your own books, your true velocity, daily reading hours, and streaks will record here.
+                Import a book and start reading — your reading velocity, daily hours, and streaks will appear here.
               </Text>
               <TouchableOpacity
                 style={styles.zeroStateBtn}
@@ -301,13 +303,12 @@ export default function StatsScreen() {
               </View>
 
               {/* Progress Bar */}
-              <View style={styles.targetProgressBarTrack}>
-                <View
-                  style={[
-                    styles.targetProgressBarFill,
-                    { width: `${dailyProgressPercent}%` },
-                    isDailyGoalMet && { backgroundColor: '#10B981' },
-                  ]}
+              <View style={styles.targetProgressBarWrap}>
+                <ProgressBar
+                  progress={dailyProgressPercent}
+                  color={isDailyGoalMet ? AppPalette.accentGreen : AppPalette.accentBerry}
+                  height={8}
+                  trackColor="rgba(255, 255, 255, 0.08)"
                 />
               </View>
 
@@ -383,7 +384,7 @@ export default function StatsScreen() {
                     <Trophy size={18} color="#D84A6A" />
                   </View>
                   <View>
-                    <Text style={styles.yearlyTitle}>2026 Reading Challenge</Text>
+                    <Text style={styles.yearlyTitle}>{currentYear} Reading Challenge</Text>
                     <Text style={styles.yearlySubtitle}>
                       {completedBooks} of {yearlyTargetBooks} books finished ({yearlyProgressPercent}%)
                     </Text>
@@ -398,19 +399,19 @@ export default function StatsScreen() {
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.yearlyProgressBarTrack}>
-                <View
-                  style={[
-                    styles.yearlyProgressBarFill,
-                    { width: `${yearlyProgressPercent}%` },
-                  ]}
+              <View style={styles.yearlyProgressBarWrap}>
+                <ProgressBar
+                  progress={yearlyProgressPercent}
+                  color={AppPalette.accentBerry}
+                  height={8}
+                  trackColor="rgba(255, 255, 255, 0.08)"
                 />
               </View>
 
               <Text style={styles.yearlyFooterText}>
                 {completedBooks >= yearlyTargetBooks
                   ? '🏆 Challenge completed! Consider setting a higher milestone.'
-                  : `${Math.max(0, yearlyTargetBooks - completedBooks)} more books to conquer your 2026 goal.`}
+                  : `${Math.max(0, yearlyTargetBooks - completedBooks)} more books to conquer your ${currentYear} goal.`}
               </Text>
             </View>
           )}
@@ -558,10 +559,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D0E11',
   },
   headerTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '800',
     color: '#FFFFFF',
-    letterSpacing: -0.3,
+    letterSpacing: -0.5,
+    fontFamily: Platform.select({
+      web: '"Georgia", "Charter", serif',
+      default: 'serif',
+    }),
   },
   headerSubtitle: {
     fontSize: 12,
@@ -695,21 +700,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#D84A6A',
   },
-  targetProgressBarTrack: {
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 6,
-    overflow: 'hidden',
+  targetProgressBarWrap: {
     marginBottom: 10,
   },
-  targetProgressBarFill: {
-    height: '100%',
-    backgroundColor: '#D84A6A',
-    borderRadius: 6,
-  },
   targetCardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'stretch',
   },
   targetFooterText: {
     fontSize: 12,
@@ -796,17 +792,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#D84A6A',
   },
-  yearlyProgressBarTrack: {
-    height: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 6,
-    overflow: 'hidden',
+  yearlyProgressBarWrap: {
     marginBottom: 8,
-  },
-  yearlyProgressBarFill: {
-    height: '100%',
-    backgroundColor: '#D84A6A',
-    borderRadius: 6,
   },
   yearlyFooterText: {
     fontSize: 11,

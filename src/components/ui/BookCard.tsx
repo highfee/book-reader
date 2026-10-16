@@ -3,14 +3,13 @@ import { inferBookTitle, inferBookAuthor } from '@/services/parsers/titleInferen
 import { Image } from 'expo-image';
 import { Bookmark, CheckCircle2 } from 'lucide-react-native';
 import React from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { ProgressBar } from './ProgressBar';
 
 interface BookCardProps {
   book: BookWithProgress;
   onPress: () => void;
   onAddToShelf?: () => void;
-  layout?: 'grid' | 'list';
 }
 
 // Curated luxury book cover palette generated deterministically from book title
@@ -39,7 +38,6 @@ export const BookCard: React.FC<BookCardProps> = ({
   book,
   onPress,
   onAddToShelf,
-  layout = 'grid',
 }) => {
   const percent = book.progress?.percentComplete ?? 0;
   const isFinished = percent >= 100;
@@ -48,128 +46,6 @@ export const BookCard: React.FC<BookCardProps> = ({
   const displayAuthor = inferBookAuthor({ title: book.title, fileName: book.fileName, author: book.author });
   const coverTheme = getCoverTheme(displayTitle);
 
-  // ----------------------------------------------------
-  // LIST VIEW LAYOUT (Editorial Row)
-  // ----------------------------------------------------
-  if (layout === 'list') {
-    return (
-      <TouchableOpacity
-        activeOpacity={0.88}
-        onPress={onPress}
-        style={styles.listCard}
-      >
-        {/* Left Miniature 3D Book Cover */}
-        <View style={[styles.listCoverWrapper, { backgroundColor: coverTheme.bg }]}>
-          <View style={[styles.bookSpine, { backgroundColor: coverTheme.spine }]} />
-          {book.coverUri ? (
-            <Image
-              source={{ uri: book.coverUri }}
-              style={styles.listCoverImage}
-              contentFit="cover"
-              transition={200}
-            />
-          ) : (
-            <View style={styles.listCoverEditorial}>
-              <Text numberOfLines={2} style={[styles.listCoverTitle, { color: coverTheme.text }]}>
-                {displayTitle}
-              </Text>
-              <Text numberOfLines={1} style={[styles.listCoverAuthor, { color: coverTheme.accent }]}>
-                {displayAuthor}
-              </Text>
-            </View>
-          )}
-
-          {/* Ribbon */}
-          <View style={styles.listRibbon} />
-        </View>
-
-        {/* Right Info Details */}
-        <View style={styles.listInfoWrapper}>
-          <View style={styles.listHeaderRow}>
-            <View style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-              <Text numberOfLines={1} style={styles.listTitle}>
-                {displayTitle}
-              </Text>
-              <Text numberOfLines={1} style={styles.listAuthor}>
-                by {displayAuthor}
-              </Text>
-            </View>
-
-            {onAddToShelf && (
-              <TouchableOpacity
-                style={styles.shelfBtn}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onAddToShelf();
-                }}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Add to Shelf"
-              >
-                <Bookmark size={16} color="#A8A29E" />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Tags & Meta */}
-          <View style={styles.listMetaRow}>
-            <View
-              style={[
-                styles.formatBadgeMini,
-                { backgroundColor: book.format === 'epub' ? '#FFFBEB' : '#FEF2F2' },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.formatTextMini,
-                  { color: book.format === 'epub' ? '#B45309' : '#DC2626' },
-                ]}
-              >
-                {book.format.toUpperCase()}
-              </Text>
-            </View>
-
-            {book.genreTags && book.genreTags[0] && (
-              <View style={styles.genrePill}>
-                <Text style={styles.genrePillText}>{book.genreTags[0]}</Text>
-              </View>
-            )}
-
-            {book.totalPages > 0 && (
-              <Text style={styles.pageMetaText}>{book.totalPages} pages</Text>
-            )}
-          </View>
-
-          {/* Reading Progress */}
-          <View style={styles.listProgressSection}>
-            <ProgressBar
-              progress={percent}
-              color={isFinished ? '#10B981' : '#D97706'}
-              height={3}
-            />
-            <View style={styles.progressLabels}>
-              <Text
-                style={[
-                  styles.progressText,
-                  isReading && { color: '#B45309', fontWeight: '700' },
-                ]}
-              >
-                {isFinished ? 'Completed' : percent > 0 ? `${percent}% finished` : 'Not started'}
-              </Text>
-              {book.progress && book.progress.currentPage > 0 ? (
-                <Text style={styles.pageText}>
-                  Page {book.progress.currentPage} of {book.totalPages || '–'}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }
-
-  // ----------------------------------------------------
-  // GRID VIEW LAYOUT (Editorial 2-Column Card)
-  // ----------------------------------------------------
   return (
     <TouchableOpacity
       activeOpacity={0.88}
@@ -251,7 +127,7 @@ export const BookCard: React.FC<BookCardProps> = ({
                 e.stopPropagation();
                 onAddToShelf();
               }}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityLabel="Add to Shelf"
             >
               <Bookmark size={14} color="#A8A29E" />
@@ -464,127 +340,5 @@ const styles = StyleSheet.create({
   pageText: {
     fontSize: 10,
     color: '#6B7280',
-  },
-
-  // -------------------------
-  // LIST ROW STYLES
-  // -------------------------
-  listCard: {
-    flexDirection: 'row',
-    backgroundColor: '#16181D',
-    borderRadius: 16,
-    marginHorizontal: 16,
-    marginVertical: 6,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  listCoverWrapper: {
-    width: 68,
-    height: 98,
-    borderRadius: 8,
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-  },
-  listCoverImage: {
-    width: '100%',
-    height: '100%',
-  },
-  listCoverEditorial: {
-    flex: 1,
-    padding: 8,
-    paddingLeft: 12,
-    justifyContent: 'center',
-  },
-  listCoverTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    lineHeight: 13,
-  },
-  listCoverAuthor: {
-    fontSize: 8,
-    marginTop: 3,
-  },
-  listRibbon: {
-    position: 'absolute',
-    top: 0,
-    right: 8,
-    width: 5,
-    height: 10,
-    backgroundColor: '#D97706',
-    borderBottomLeftRadius: 2,
-    borderBottomRightRadius: 2,
-  },
-  listInfoWrapper: {
-    flex: 1,
-    marginLeft: 14,
-    justifyContent: 'space-between',
-  },
-  listHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  listTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1C1917',
-    letterSpacing: -0.2,
-    fontFamily: Platform.select({
-      web: '"Charter", "Georgia", "Newsreader", serif',
-      default: 'serif',
-    }),
-  },
-  listAuthor: {
-    fontSize: 11,
-    color: '#78716C',
-    fontStyle: 'italic',
-    marginTop: 1,
-  },
-  listMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginVertical: 4,
-  },
-  formatBadgeMini: {
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-  },
-  formatTextMini: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  genrePill: {
-    backgroundColor: '#FAF8F5',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: '#E7E5E4',
-  },
-  genrePillText: {
-    fontSize: 9,
-    color: '#78716C',
-    fontWeight: '500',
-  },
-  pageMetaText: {
-    fontSize: 10,
-    color: '#A8A29E',
-    marginLeft: 2,
-  },
-  listProgressSection: {
-    marginTop: 4,
   },
 });

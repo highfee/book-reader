@@ -63,9 +63,20 @@ export const HorizontalScroll = React.forwardRef<ScrollView, HorizontalScrollPro
       };
 
       const onWheel = (e: WheelEvent) => {
-        // If content is horizontally scrollable, translate vertical wheel to horizontal
-        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-        if (delta !== 0 && element.scrollWidth > element.clientWidth) {
+        // Only intercept the wheel when the row can actually consume the scroll,
+        // so vertical page scrolling is never trapped over a pill row.
+        if (element.scrollWidth <= element.clientWidth) return;
+
+        const maxScroll = element.scrollWidth - element.clientWidth;
+        const absX = Math.abs(e.deltaX);
+        const absY = Math.abs(e.deltaY);
+        const delta = absX > absY ? e.deltaX : e.deltaY;
+        const scrollingForward = delta > 0;
+        const canScroll = scrollingForward
+          ? element.scrollLeft < maxScroll - 1
+          : element.scrollLeft > 1;
+
+        if (delta !== 0 && canScroll) {
           e.preventDefault();
           element.scrollLeft += delta;
         }
