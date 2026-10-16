@@ -14,6 +14,8 @@ export interface DiscoveredBookFile {
   format: 'pdf' | 'epub';
   sizeBytes?: number;
   lastModified?: number;
+  /** Web only: the picked File, so its bytes can be cached in IndexedDB. */
+  fileObj?: any;
 }
 
 export class SAFStorageService {

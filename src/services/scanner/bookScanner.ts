@@ -142,6 +142,11 @@ export class BookScannerService {
       };
 
       await BookRepository.upsertBook(newBook);
+      if (file.fileObj) {
+        // Web blob: URLs die on reload — index the bytes under the book id so the
+        // original-PDF view can revive them without guessing from the file name.
+        await SAFStorageService.persistBookFile(file.fileName, file.fileObj, deterministicId);
+      }
       newlyAdded++;
     }
 

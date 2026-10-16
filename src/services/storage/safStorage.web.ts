@@ -37,29 +37,48 @@ function openIndexedDB(): Promise<IDBDatabase> {
 async function saveFileToIndexedDB(fileName: string, file: File, bookId?: string): Promise<void> {
   try {
     const db = await openIndexedDB();
-    const tx = db.transaction('book_files', 'readwrite');
-    const store = tx.objectStore('book_files');
-    // Store with raw original filename
-    store.put({ fileName, file, size: file.size, lastModified: file.lastModified });
-    
-    // Also save by clean base name without extension
-    const baseName = fileName.replace(/\.[^/.]+$/, '').trim();
-    if (baseName && baseName !== fileName) {
-      store.put({ fileName: baseName, file, size: file.size, lastModified: file.lastModified });
-    }
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('book_files', 'readwrite');
+      const store = tx.objectStore('book_files');
+      const put = (key: string) => store.put({ fileName: key, file, size: file.size, lastModified: file.lastModified });
 
-    // Save with normalized lowercase alphanumeric key
-    const normalizedKey = fileName.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (normalizedKey && normalizedKey !== fileName) {
-      store.put({ fileName: normalizedKey, file, size: file.size, lastModified: file.lastModified });
-    }
+      // Store with raw original filename
+      put(fileName);
 
-    // Save with bookId if provided
-    if (bookId) {
-      store.put({ fileName: bookId, file, size: file.size, lastModified: file.lastModified });
-    }
+      // Also save by clean base name without extension
+      const baseName = fileName.replace(/\.[^/.]+$/, '').trim();
+      if (baseName && baseName !== fileName) put(baseName);
+
+      // Save with normalized lowercase alphanumeric key
+      const normalizedKey = fileName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normalizedKey && normalizedKey !== fileName) put(normalizedKey);
+
+      // Save with bookId if provided
+      if (bookId) put(bookId);
+
+      // Resolving before oncomplete would let a reload race the write and lose the bytes.
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
   } catch (err) {
     console.warn('Could not store file in IndexedDB:', err);
+  }
+}
+
+async function putFileUnderKey(key: string, file: File): Promise<void> {
+  if (!key) return;
+  try {
+    const db = await openIndexedDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('book_files', 'readwrite');
+      tx.objectStore('book_files').put({ fileName: key, file, size: file.size, lastModified: file.lastModified });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn('Could not index file in IndexedDB:', err);
   }
 }
 
@@ -228,7 +247,7 @@ export class SAFStorageService {
               const file = await entry.getFile();
               const objectUrl = URL.createObjectURL(file);
               webFileCache.set(objectUrl, file);
-              saveFileToIndexedDB(entry.name, file);
+              await saveFileToIndexedDB(entry.name, file);
 
               discovered.push({
                 fileUri: objectUrl,
@@ -294,9 +313,10 @@ export class SAFStorageService {
       input.style.display = 'none';
       document.body.appendChild(input);
 
-      input.onchange = () => {
+      input.onchange = async () => {
         const fileList = input.files;
         const discovered: DiscoveredBookFile[] = [];
+        const pendingWrites: Promise<void>[] = [];
 
         if (fileList) {
           for (let i = 0; i < fileList.length; i++) {
@@ -309,7 +329,7 @@ export class SAFStorageService {
             if (format) {
               const objectUrl = URL.createObjectURL(file);
               webFileCache.set(objectUrl, file);
-              saveFileToIndexedDB(file.name, file);
+              pendingWrites.push(saveFileToIndexedDB(file.name, file));
 
               discovered.push({
                 fileUri: objectUrl,
@@ -322,6 +342,9 @@ export class SAFStorageService {
             }
           }
         }
+
+        // The bytes must be durable before the caller stores this blob URL as the book's fileUri.
+        await Promise.all(pendingWrites);
 
         try {
           document.body.removeChild(input);
@@ -382,6 +405,8 @@ export class SAFStorageService {
     }
 
     if (storedFile) {
+      // Backfill the id key so the next reload never depends on name heuristics.
+      if (bookId) await putFileUnderKey(bookId, storedFile);
       const freshUrl = URL.createObjectURL(storedFile);
       webFileCache.set(freshUrl, storedFile);
       return freshUrl;
