@@ -1,5 +1,6 @@
 import { SAFStorageService } from '../storage/safStorage';
 import { PDFTextExtractor } from './pdfTextExtractor';
+import { EPUBTextExtractor } from './epubTextExtractor';
 
 export interface PageContent {
   chapterBadge: string;
@@ -82,8 +83,32 @@ export class BookContentService {
       }
     }
 
-    // 2. Check general file content (plain text / HTML). EPUB containers need a
-    // zip reader the app does not have yet, so they are never decoded as text.
+    // 2. EPUB: unpack the container and serve the prose its spine points at.
+    if (sourceUri && isZip) {
+      try {
+        const epubPages = await EPUBTextExtractor.extractPages(sourceUri);
+        if (epubPages.length > 0) {
+          const pageIdx = Math.max(0, Math.min(pageNumber - 1, epubPages.length - 1));
+          const page = epubPages[pageIdx];
+          const chapterNum = epubPages
+            .slice(0, pageIdx + 1)
+            .filter((p) => p.startsChapter).length;
+
+          return {
+            chapterBadge: `CHAPTER ${chapterNum} • PAGE ${pageNumber} OF ${epubPages.length}`,
+            chapterTitle: page.chapterTitle,
+            paragraphs: page.text.split('\n\n').filter((p) => p.trim().length > 0),
+            quote: undefined,
+            isAuthentic: true,
+          };
+        }
+      } catch (err) {
+        console.warn('EPUB extraction failed, falling back to placeholder prose:', err);
+      }
+    }
+
+    // 3. Check general file content (plain text / HTML). Containers that are
+    // neither a PDF nor a zip can be decoded straight to a string.
     if (sourceUri && !isZip && (sourceUri.startsWith('http') || sourceUri.startsWith('blob:') || sourceUri.startsWith('file:') || sourceUri.startsWith('content:'))) {
       const filePages = await this.loadAndPaginateFile(sourceUri, totalPages);
       if (filePages.length > 0) {
@@ -102,18 +127,37 @@ export class BookContentService {
       }
     }
 
-    // 2. Curated Authentic Literature for The Odyssey
+    // 4. Curated Authentic Literature for The Odyssey
     if (cleanTitle.includes('odyssey') || cleanTitle.includes('homer')) {
       return this.getOdysseyPage(pageNumber, totalPages);
     }
 
-    // 3. Curated Authentic Literature for Frankenstein
+    // 5. Curated Authentic Literature for Frankenstein
     if (cleanTitle.includes('frankenstein') || cleanTitle.includes('shelley')) {
       return this.getFrankensteinPage(pageNumber, totalPages);
     }
 
-    // 4. Default Dynamic Classical Story Engine (Distinct readable prose for every page)
+    // 6. Default Dynamic Classical Story Engine (Distinct readable prose for every page)
     return this.getProceduralClassicPage(bookTitle, pageNumber, totalPages);
+  }
+
+  /**
+   * How many pages the book's real content occupies, or 0 when no readable text
+   * could be extracted. Readers use this to replace the guessed page count.
+   */
+  static async countPages(bookTitle: string, fileUri?: string): Promise<number> {
+    let sourceUri = fileUri;
+    if (sourceUri) {
+      try {
+        sourceUri = await SAFStorageService.getLiveFileUri(bookTitle || '', sourceUri, bookTitle);
+      } catch {}
+    }
+    if (!sourceUri) return 0;
+
+    const container = await PDFTextExtractor.detectContainer(sourceUri);
+    if (container === 'pdf') return 0;
+    if (container === 'zip') return (await EPUBTextExtractor.extractPages(sourceUri)).length;
+    return (await this.loadAndPaginateFile(sourceUri, 1)).length;
   }
 
   /**

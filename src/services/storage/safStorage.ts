@@ -18,6 +18,29 @@ export interface DiscoveredBookFile {
   fileObj?: any;
 }
 
+const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/**
+ * Hermes does not guarantee atob/Buffer, so decode by hand.
+ */
+function decodeBase64(value: string): Uint8Array | null {
+  if (!value) return null;
+  const bytes: number[] = [];
+  let acc = 0;
+  let bits = 0;
+  for (let i = 0; i < value.length; i++) {
+    const idx = B64_ALPHABET.indexOf(value[i]);
+    if (idx < 0) continue;
+    acc = (acc << 6) | idx;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.push((acc >> bits) & 0xff);
+    }
+  }
+  return bytes.length ? Uint8Array.from(bytes) : null;
+}
+
 export class SAFStorageService {
   /**
    * Request directory permissions from the user.
@@ -204,6 +227,35 @@ export class SAFStorageService {
    */
   static async readFileHead(_fileUri: string, _byteLength?: number): Promise<Uint8Array | null> {
     return null;
+  }
+
+  /**
+   * Byte length of a file, or 0 when it cannot be found.
+   */
+  static async getFileSize(fileUri: string): Promise<number> {
+    try {
+      const info = await FileSystem.getInfoAsync(fileUri);
+      return info.exists && !info.isDirectory ? info.size : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Reads one byte range, decoded from base64, so container readers never pull
+   * a whole multi-hundred-megabyte archive into memory.
+   */
+  static async readFileRange(fileUri: string, position: number, length: number): Promise<Uint8Array | null> {
+    try {
+      const base64 = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.Base64,
+        position,
+        length,
+      });
+      return decodeBase64(base64);
+    } catch {
+      return null;
+    }
   }
 
   /**

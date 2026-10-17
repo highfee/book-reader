@@ -107,16 +107,22 @@ export default function ReaderScreen() {
         setBook(data);
         startReadingSession(data);
 
-        // For PDF books, extract the authentic page count and synchronize
-        if (data.format === 'pdf') {
-          PDFMetadataService.getPdfPageCount(data.fileUri, data.fileName || data.title).then(async (realPages) => {
-            if (realPages > 0 && realPages !== data.totalPages) {
-              setBook((prev) => (prev ? { ...prev, totalPages: realPages } : null));
-              await BookRepository.updateBookTotalPages(data.id, realPages);
-              await updatePageProgress(currentPage, undefined, realPages);
-            }
-          });
-        }
+        // Replace the guessed page count with the one the file really has,
+        // otherwise the reader parks on page 1 for every book.
+        const syncRealPageCount = async (realPages: number) => {
+          if (realPages > 0 && realPages !== data.totalPages) {
+            setBook((prev) => (prev ? { ...prev, totalPages: realPages } : null));
+            await BookRepository.updateBookTotalPages(data.id, realPages);
+            await updatePageProgress(currentPage, undefined, realPages);
+          }
+        };
+
+        const pageCount =
+          data.format === 'pdf'
+            ? PDFMetadataService.getPdfPageCount(data.fileUri, data.fileName || data.title)
+            : BookContentService.countPages(data.title, data.fileUri);
+
+        pageCount.then(syncRealPageCount).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to load book in reader:', err);

@@ -491,12 +491,36 @@ export class SAFStorageService {
    * Returns the first bytes of a file so callers can tell a PDF, an EPUB (zip)
    * and plain text apart without decoding the whole document.
    */
-  static async readFileHead(fileUri: string, byteLength = 4): Promise<Uint8Array | null> {
-    const cachedFile = await resolveWebFile(fileUri);
+  static async readFileHead(fileUri: string, byteLength = 4): Promise<Uint8Array | null> {    const cachedFile = await resolveWebFile(fileUri);
     if (!cachedFile) return null;
     try {
       const head = await cachedFile.slice(0, byteLength).arrayBuffer();
       return new Uint8Array(head);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Byte length of a cached file, so range readers can address it. Zero means
+   * the file is not available in this session.
+   */
+  static async getFileSize(fileUri: string): Promise<number> {
+    const cachedFile = await resolveWebFile(fileUri);
+    return cachedFile ? cachedFile.size : 0;
+  }
+
+  /**
+   * Reads one byte range without touching the rest of the file. Large archives
+   * (a scanned EPUB can pass a hundred megabytes) are only ever paged through
+   * this, never loaded whole.
+   */
+  static async readFileRange(fileUri: string, position: number, length: number): Promise<Uint8Array | null> {
+    const cachedFile = await resolveWebFile(fileUri);
+    if (!cachedFile) return null;
+    try {
+      const slice = await cachedFile.slice(position, position + length).arrayBuffer();
+      return new Uint8Array(slice);
     } catch {
       return null;
     }
