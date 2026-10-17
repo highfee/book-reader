@@ -14,6 +14,7 @@ export default function RootLayout() {
     async function prepare() {
       try {
         await DatabaseService.getDatabase();
+        await ReadingNotificationService.configure();
         await ReadingNotificationService.scheduleDailyReminderDaemon();
       } catch (e) {
         console.warn('Database initialization error:', e);

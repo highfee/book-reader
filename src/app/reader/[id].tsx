@@ -40,6 +40,7 @@ import { AudioMiniPlayer } from '@/components/reader/AudioMiniPlayer';
 import { DictionaryModal } from '@/components/dictionary/DictionaryModal';
 import { TTSService } from '@/services/audio/textToSpeechService';
 import { AmbientService } from '@/services/audio/ambientAudioService';
+import { ReadingNotificationService } from '@/services/notifications/readingNotificationService';
 import {
   ReaderThemeModal,
   PaperThemeId,
@@ -70,6 +71,7 @@ export default function ReaderScreen() {
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
   const [dictionaryTerm, setDictionaryTerm] = useState('');
   const [currentPageText, setCurrentPageText] = useState('');
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
 
   // Selection & Tooltip state
   const [selectedText, setSelectedText] = useState('');
@@ -145,6 +147,29 @@ export default function ReaderScreen() {
     };
     loadGoalsAndToday();
 
+    const loadReadingPreferences = async () => {
+      try {
+        const [savedTheme, savedFont, savedSize, savedGutter] = await Promise.all([
+          BookRepository.getSetting('reader_default_theme'),
+          BookRepository.getSetting('reader_default_font'),
+          BookRepository.getSetting('reader_default_font_size'),
+          BookRepository.getSetting('reader_gutter_shadow'),
+        ]);
+        if (savedTheme && savedTheme in PAPER_THEMES) setTheme(savedTheme as PaperThemeId);
+        if (savedFont === 'serif' || savedFont === 'sans' || savedFont === 'mono') {
+          setFontFamily(savedFont);
+        }
+        const parsedSize = Number(savedSize);
+        if (Number.isFinite(parsedSize) && parsedSize > 0) setFontSize(parsedSize);
+        if (savedGutter !== null) setGutterShadowEnabled(savedGutter === 'true');
+      } catch (e) {
+        console.warn('Failed to load reading preferences:', e);
+      } finally {
+        setPrefsLoaded(true);
+      }
+    };
+    loadReadingPreferences();
+
     // 1-second cadence timer respecting idle activity
     const timer = setInterval(() => {
       tickActiveReadingSecond();
@@ -152,11 +177,25 @@ export default function ReaderScreen() {
 
     return () => {
       clearInterval(timer);
-      endReadingSession();
+      endReadingSession()
+        // Today's tally just changed, so the pending nudge needs new numbers
+        // — or no nudge at all if the goal is now met.
+        .then(() => ReadingNotificationService.scheduleDailyReminderDaemon())
+        .catch(() => {});
       TTSService.stop();
       AmbientService.stop();
     };
   }, [id, tickActiveReadingSecond, endReadingSession]);
+
+  // Typography choices are app-wide defaults (the same keys Settings edits),
+  // so they are only written once the stored values have been read back.
+  useEffect(() => {
+    if (!prefsLoaded) return;
+    BookRepository.setSetting('reader_default_theme', theme).catch(() => {});
+    BookRepository.setSetting('reader_default_font', fontFamily).catch(() => {});
+    BookRepository.setSetting('reader_default_font_size', String(fontSize)).catch(() => {});
+    BookRepository.setSetting('reader_gutter_shadow', String(gutterShadowEnabled)).catch(() => {});
+  }, [prefsLoaded, theme, fontFamily, fontSize, gutterShadowEnabled]);
 
   // Page text for TTS narration. PDFs supply their own extracted text through
   // PDFReaderView.onPageTextExtracted, so only EPUBs are fetched here.
@@ -189,6 +228,7 @@ export default function ReaderScreen() {
   const handleSaveGoals = useCallback(async (next: ReadingGoals) => {
     setGoals(next);
     await BookRepository.saveReadingGoals(next);
+    await ReadingNotificationService.scheduleDailyReminderDaemon();
   }, []);
 
   const persistHudVisibility = useCallback((visible: boolean) => {

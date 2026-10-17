@@ -1,5 +1,9 @@
 import { Platform, Vibration } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { BookRepository } from '@/services/database/bookRepository';
+
+const TARGET_CHANNEL_ID = 'reading-daily-target';
+const SCHEDULED_REMINDER_KEY = 'notification_scheduled_reminder_id';
 
 export interface NotificationSettings {
   dailyReminderEnabled: boolean;
@@ -91,10 +95,37 @@ export class ReadingNotificationService {
   }
 
   /**
+   * One-time startup work: foreground presentation rules and the Android channel.
+   * expo-notifications has no scheduler on web, so every call here is native-only.
+   */
+  static async configure(): Promise<void> {
+    if (Platform.OS === 'web') return;
+
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+      }),
+    });
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync(TARGET_CHANNEL_ID, {
+        name: 'Reading targets',
+        description: 'Daily goal reminders and milestone celebrations',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        lightColor: '#D97706',
+      });
+    }
+  }
+
+  /**
    * Requests system / web notification permissions
    */
   static async requestPermission(): Promise<boolean> {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined' || !('Notification' in window)) return false;
       try {
         const result = await window.Notification.requestPermission();
         return result === 'granted';
@@ -103,21 +134,36 @@ export class ReadingNotificationService {
         return false;
       }
     }
-    return true;
+
+    try {
+      const { status } = await Notifications.requestPermissionsAsync();
+      return status === 'granted';
+    } catch (e) {
+      console.warn('Error requesting notification permission:', e);
+      return false;
+    }
   }
 
   /**
    * Checks current permission status
    */
-  static hasPermission(): boolean {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
-      return window.Notification.permission === 'granted';
+  static async hasPermission(): Promise<boolean> {
+    if (Platform.OS === 'web') {
+      return typeof window !== 'undefined' && 'Notification' in window
+        ? window.Notification.permission === 'granted'
+        : false;
     }
-    return true;
+
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      return status === 'granted';
+    } catch {
+      return false;
+    }
   }
 
   /**
-   * Dispatches a notification across native web Notification API and in-app listeners
+   * Dispatches a notification through the platform presenter and in-app listeners
    */
   static async dispatchNotification(title: string, body: string, vibrate = true) {
     if (vibrate) {
@@ -131,19 +177,32 @@ export class ReadingNotificationService {
     // In-app listener broadcast
     this.emitEvent('notification', title, body);
 
-    // Browser Notification API
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window) {
-      if (window.Notification.permission === 'granted') {
-        try {
-          new window.Notification(title, {
-            body,
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-          });
-        } catch (e) {
-          console.warn('Web notification dispatch error:', e);
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (window.Notification.permission === 'granted') {
+          try {
+            new window.Notification(title, {
+              body,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico',
+            });
+          } catch (e) {
+            console.warn('Web notification dispatch error:', e);
+          }
         }
       }
+      return;
+    }
+
+    try {
+      // A channelId-only trigger delivers immediately; the handler installed in
+      // configure() decides whether it is shown while the app is up.
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body },
+        trigger: Platform.OS === 'android' ? { channelId: TARGET_CHANNEL_ID } : null,
+      });
+    } catch (e) {
+      console.warn('Native notification dispatch error:', e);
     }
   }
 
@@ -217,53 +276,137 @@ export class ReadingNotificationService {
   }
 
   /**
-   * Sets up a timer daemon to check if it's reminder time
+   * Arms the next daily nudge. Native hands the notification to the operating
+   * system so it still fires with the app closed; web has no scheduler, so it can
+   * only poll while a tab is open.
    */
   static async scheduleDailyReminderDaemon(): Promise<void> {
-    if (this.timerHandle) {
-      clearInterval(this.timerHandle);
-      this.timerHandle = null;
+    this.stopPoller();
+
+    if (Platform.OS === 'web') {
+      this.startWebPoller();
+      return;
+    }
+
+    // Clear only the reminder this service owns, so other scheduled
+    // notifications in the app survive a goal change.
+    const previousId = await BookRepository.getSetting(SCHEDULED_REMINDER_KEY);
+    if (previousId) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(previousId);
+      } catch (err) {
+        console.warn('Could not clear the previous reminder:', err);
+      }
+      await BookRepository.setSetting(SCHEDULED_REMINDER_KEY, '');
     }
 
     const settings = await this.getSettings();
     if (!settings.dailyReminderEnabled) return;
 
-    // Run interval every 60 seconds to check against reminder time
-    this.timerHandle = setInterval(async () => {
-      try {
-        const now = new Date();
-        const currentHours = String(now.getHours()).padStart(2, '0');
-        const currentMinutes = String(now.getMinutes()).padStart(2, '0');
-        const currentTimeStr = `${currentHours}:${currentMinutes}`;
+    const [hour, minute] = this.parseReminderTime(settings.reminderTime);
+    const targetDate = this.nextOccurrence(hour, minute);
+    if (!targetDate) return;
 
-        if (currentTimeStr === settings.reminderTime) {
-          // Check if today's reading target has already been met
-          const todayStr = now.toISOString().substring(0, 10);
-          const [actMap, goals] = await Promise.all([
-            BookRepository.getReadingActivityMap(1),
-            BookRepository.getReadingGoals(),
-          ]);
+    const remaining = await this.minutesRemainingOn(targetDate);
+    // The goal is already closed for the day the nudge would land on.
+    if (remaining <= 0) return;
 
-          const todaySecs = actMap[todayStr]?.durationSeconds || 0;
-          const todayMins = Math.round(todaySecs / 60);
-          const targetMins = goals.dailyMinutes || 20;
+    const targetText = this.formatMinutes(remaining);
+    try {
+      const scheduledId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: '📚 Daily Reading Reminder',
+          body: `Keep your streak alive! ${targetText} left to reach today's goal.`,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: targetDate,
+          ...(Platform.OS === 'android' ? { channelId: TARGET_CHANNEL_ID } : {}),
+        },
+      });
+      // A DATE trigger fires once, so the id is kept to replace it on the next
+      // app start instead of stacking nudges.
+      await BookRepository.setSetting(SCHEDULED_REMINDER_KEY, scheduledId);
+    } catch (err) {
+      console.warn('Could not schedule the daily reminder:', err);
+    }
+  }
 
-          if (todayMins < targetMins) {
-            const remaining = targetMins - todayMins;
-            const targetText = targetMins >= 60 ? `${(targetMins / 60).toFixed(1)} hrs` : `${targetMins} mins`;
-            const remainingText = remaining >= 60 ? `${Math.floor(remaining / 60)}h ${remaining % 60}m` : `${remaining}m`;
+  /**
+   * Web-only fallback: checks each minute whether reminder time has arrived.
+   * Only runs while the tab is open, which is the browser's limit, not ours.
+   */
+  private static startWebPoller(): void {
+    void this.getSettings().then((settings) => {
+      if (!settings.dailyReminderEnabled) return;
 
-            await this.dispatchNotification(
-              '📚 Daily Reading Reminder',
-              `Keep your streak alive! You have ${remainingText} left to reach your ${targetText} goal today.`,
-              true
-            );
+      this.timerHandle = setInterval(async () => {
+        try {
+          const now = new Date();
+          const currentHours = String(now.getHours()).padStart(2, '0');
+          const currentMinutes = String(now.getMinutes()).padStart(2, '0');
+          const currentTimeStr = `${currentHours}:${currentMinutes}`;
+
+          if (currentTimeStr === settings.reminderTime) {
+            const remaining = await this.minutesRemainingOn(now);
+            if (remaining > 0) {
+              await this.dispatchNotification(
+                '📚 Daily Reading Reminder',
+                `Keep your streak alive! ${this.formatMinutes(remaining)} left to reach today's goal.`,
+                true
+              );
+            }
           }
+        } catch (err) {
+          console.warn('Error in daily reminder daemon:', err);
         }
-      } catch (err) {
-        console.warn('Error in daily reminder daemon:', err);
-      }
-    }, 60000);
+      }, 60000);
+    });
+  }
+
+  private static stopPoller(): void {
+    if (this.timerHandle) {
+      clearInterval(this.timerHandle);
+      this.timerHandle = null;
+    }
+  }
+
+  private static parseReminderTime(value: string): [number, number] {
+    const [rawHour, rawMinute] = value.split(':');
+    const hour = Number.parseInt(rawHour, 10);
+    const minute = Number.parseInt(rawMinute, 10);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) return [20, 0];
+    return [Math.min(23, Math.max(0, hour)), Math.min(59, Math.max(0, minute))];
+  }
+
+  /** Next local occurrence of the hour:minute pair, or null if unusable. */
+  private static nextOccurrence(hour: number, minute: number): Date | null {
+    const target = new Date();
+    target.setSeconds(0, 0);
+    target.setHours(hour, minute);
+    // Already past today's slot? Then the reminder belongs to tomorrow.
+    if (target.getTime() <= Date.now()) {
+      target.setDate(target.getDate() + 1);
+    }
+    return target;
+  }
+
+  /** Minutes still owed toward the goal on the day `forDate` lands. */
+  private static async minutesRemainingOn(forDate: Date): Promise<number> {
+    const [actMap, goals] = await Promise.all([
+      BookRepository.getReadingActivityMap(1),
+      BookRepository.getReadingGoals(),
+    ]);
+
+    const dayKey = forDate.toISOString().substring(0, 10);
+    const readMinutes = Math.round((actMap[dayKey]?.durationSeconds || 0) / 60);
+    return Math.max(0, (goals.dailyMinutes || 20) - readMinutes);
+  }
+
+  private static formatMinutes(minutes: number): string {
+    return minutes >= 60
+      ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+      : `${minutes}m`;
   }
 
   /**

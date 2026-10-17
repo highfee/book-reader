@@ -44,7 +44,7 @@ export function NotificationReminderModal({
     const s = await ReadingNotificationService.getSettings();
     setSettings(s);
     setCustomTime(s.reminderTime);
-    setHasPermission(ReadingNotificationService.hasPermission());
+    setHasPermission(await ReadingNotificationService.hasPermission());
   };
 
   useEffect(() => {
@@ -57,11 +57,13 @@ export function NotificationReminderModal({
     const granted = await ReadingNotificationService.requestPermission();
     setHasPermission(granted);
     if (granted) {
-      Alert.alert('Permission Granted', 'Notifications are enabled for your reading targets!');
+      await ReadingNotificationService.scheduleDailyReminderDaemon();
     } else {
       Alert.alert(
         'Permission Needed',
-        'Please allow notifications in your browser/device settings to receive reading alerts.'
+        Platform.OS === 'web'
+          ? 'Allow notifications in your browser settings to receive reading alerts. Web alerts only arrive while this tab is open.'
+          : 'Enable notifications in your device settings to receive reading alerts.'
       );
     }
   };
@@ -108,8 +110,8 @@ export function NotificationReminderModal({
             </TouchableOpacity>
           </View>
 
-          {/* Browser Permission Banner (Web) */}
-          {Platform.OS === 'web' && !hasPermission && (
+          {/* System Permission Banner */}
+          {!hasPermission && (
             <TouchableOpacity
               style={styles.permissionBanner}
               onPress={handleRequestPermission}
@@ -117,8 +119,14 @@ export function NotificationReminderModal({
             >
               <ShieldAlert size={18} color="#F59E0B" />
               <View style={styles.permissionTextCol}>
-                <Text style={styles.permissionBannerTitle}>Enable Browser Notifications</Text>
-                <Text style={styles.permissionBannerSub}>Tap to allow alerts when reading target is approaching</Text>
+                <Text style={styles.permissionBannerTitle}>
+                  {Platform.OS === 'web' ? 'Enable Browser Notifications' : 'Enable Notifications'}
+                </Text>
+                <Text style={styles.permissionBannerSub}>
+                  {Platform.OS === 'web'
+                    ? 'Tap to allow alerts. Web alerts only arrive while this tab stays open'
+                    : 'Tap to allow target reminders on your phone, even when the app is closed'}
+                </Text>
               </View>
             </TouchableOpacity>
           )}
