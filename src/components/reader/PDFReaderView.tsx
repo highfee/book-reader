@@ -34,7 +34,7 @@ interface PDFReaderViewProps {
   onPageTextExtracted?: (text: string) => void;
   onNextPage?: () => void;
   onPrevPage?: () => void;
-  onJumpToPage?: (page: number) => void;
+  onRequestGoToPage?: () => void;
   bookTitle?: string;
   fileName?: string;
   bookId?: string;
@@ -55,6 +55,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
   onPageTextExtracted,
   onNextPage,
   onPrevPage,
+  onRequestGoToPage,
   bookTitle = 'PDF Document',
   theme = 'sepia',
   fontSize = 18,
@@ -143,9 +144,16 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
             <ChevronLeft size={16} color={currentPage <= 1 ? '#6B7280' : '#FFFFFF'} />
           </TouchableOpacity>
 
-          <Text style={styles.pdfPageText}>
-            Page {currentPage} of {totalPages || 1}
-          </Text>
+          <TouchableOpacity
+            onPress={onRequestGoToPage}
+            disabled={!onRequestGoToPage}
+            activeOpacity={0.7}
+            accessibilityLabel="Go to page"
+          >
+            <Text style={styles.pdfPageText}>
+              Page {currentPage} of {totalPages || 1}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={onNextPage}

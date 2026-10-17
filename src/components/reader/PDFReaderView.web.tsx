@@ -10,8 +10,6 @@ import {
   Highlighter,
   Sparkles,
   X,
-  FileText,
-  Volume2,
 } from 'lucide-react-native';
 import { BookContentService, PageContent } from '@/services/parsers/bookContentService';
 import { SAFStorageService } from '@/services/storage/safStorage.web';
@@ -32,7 +30,7 @@ interface PDFReaderViewProps {
   onPageTextExtracted?: (text: string) => void;
   onNextPage?: () => void;
   onPrevPage?: () => void;
-  onJumpToPage?: (page: number) => void;
+  onRequestGoToPage?: () => void;
   bookTitle?: string;
   fileName?: string;
   bookId?: string;
@@ -54,7 +52,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
   onPageTextExtracted,
   onNextPage,
   onPrevPage,
-  onJumpToPage,
+  onRequestGoToPage,
   bookTitle = 'PDF Document',
   fileName,
   bookId,
@@ -296,20 +294,10 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => {
-                    const promptVal = typeof window !== 'undefined' ? window.prompt(`Go to page (1 - ${pdfTotalPages}):`, String(currentPage)) : null;
-                    if (promptVal) {
-                      const num = parseInt(promptVal, 10);
-                      if (!isNaN(num) && num >= 1 && num <= pdfTotalPages) {
-                        if (onJumpToPage) {
-                          onJumpToPage(num);
-                        } else {
-                          onPageChange(num, pdfTotalPages);
-                        }
-                      }
-                    }
-                  }}
+                  onPress={onRequestGoToPage}
+                  disabled={!onRequestGoToPage}
                   activeOpacity={0.7}
+                  accessibilityLabel="Go to page"
                 >
                   <Text style={styles.pdfPageText}>
                     Page {currentPage} of {pdfTotalPages}

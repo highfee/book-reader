@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Headphones,
   Sliders,
+  Hash,
 } from 'lucide-react-native';
 import { AppPalette, Fonts } from '@/constants/theme';
 
@@ -26,6 +27,7 @@ interface ReaderOverflowModalProps {
   visible: boolean;
   onClose: () => void;
   onOpenToc: () => void;
+  onOpenGoTo: () => void;
   onOpenSearch: () => void;
   onOpenNotes: () => void;
   onOpenAudio: () => void;
@@ -42,6 +44,7 @@ export function ReaderOverflowModal({
   visible,
   onClose,
   onOpenToc,
+  onOpenGoTo,
   onOpenSearch,
   onOpenNotes,
   onOpenAudio,
@@ -92,6 +95,25 @@ export function ReaderOverflowModal({
               <View style={styles.menuTextCol}>
                 <Text style={styles.menuItemTitle}>Table of Contents</Text>
                 <Text style={styles.menuItemSub}>Jump between book chapters & sections</Text>
+              </View>
+              <ChevronRight size={16} color="#6B7280" />
+            </TouchableOpacity>
+
+            {/* Go to Page */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                onClose();
+                onOpenGoTo();
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.menuIconCircle, { backgroundColor: 'rgba(217, 119, 6, 0.15)' }]}>
+                <Hash size={18} color="#D97706" />
+              </View>
+              <View style={styles.menuTextCol}>
+                <Text style={styles.menuItemTitle}>Go to Page</Text>
+                <Text style={styles.menuItemSub}>Jump straight to a page number</Text>
               </View>
               <ChevronRight size={16} color="#6B7280" />
             </TouchableOpacity>

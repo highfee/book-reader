@@ -26,6 +26,7 @@ import {
   Sliders,
   Target,
   MoreVertical,
+  ChevronsUpDown,
 } from 'lucide-react-native';
 import { TargetFocusHUD } from '@/components/reader/TargetFocusHUD';
 import { ReaderOverflowModal } from '@/components/reader/ReaderOverflowModal';
@@ -36,6 +37,7 @@ import { useReadingStore } from '@/stores/useReadingStore';
 import { AICompanionModal } from '@/components/ai/AICompanionModal';
 import { NotesModal } from '@/components/notes/NotesModal';
 import { TableOfContentsModal } from '@/components/reader/TableOfContentsModal';
+import { GoToPageModal } from '@/components/reader/GoToPageModal';
 import { BookSearchModal } from '@/components/reader/BookSearchModal';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { PDFMetadataService } from '@/services/parsers/pdfMetadata';
@@ -73,6 +75,7 @@ export default function ReaderScreen() {
   const [showAiModal, setShowAiModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
   const [showTocModal, setShowTocModal] = useState(false);
+  const [showGoToModal, setShowGoToModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showAudioStudio, setShowAudioStudio] = useState(false);
   const [showDictionaryModal, setShowDictionaryModal] = useState(false);
@@ -252,6 +255,8 @@ export default function ReaderScreen() {
   }, []);
 
   const openAudioStudio = useCallback(() => setShowAudioStudio(true), []);
+
+  const openGoToModal = useCallback(() => setShowGoToModal(true), []);
 
   const handleTextSelected = useCallback((text: string, coords?: SelectionCoords | null) => {
     recordUserInteraction();
@@ -495,7 +500,7 @@ export default function ReaderScreen() {
           onPageTextExtracted={handlePageTextExtracted}
           onNextPage={handleNextPage}
           onPrevPage={handlePrevPage}
-          onJumpToPage={handleJumpToPage}
+          onRequestGoToPage={openGoToModal}
         />
       ) : (
         <EPUBReaderView
@@ -553,9 +558,17 @@ export default function ReaderScreen() {
             </Text>
           </TouchableOpacity>
 
-          <Text style={[styles.bottomPageText, { color: currentTheme.secondaryText }]}>
-            {currentPage} / {effectiveTotalPages}
-          </Text>
+          <TouchableOpacity
+            onPress={() => setShowGoToModal(true)}
+            style={[styles.gotoPill, { borderColor: currentTheme.headerBorder }]}
+            activeOpacity={0.75}
+            accessibilityLabel="Go to page"
+          >
+            <Text style={[styles.bottomPageText, { color: currentTheme.text }]}>
+              {currentPage} / {effectiveTotalPages}
+            </Text>
+            <ChevronsUpDown size={13} color={currentTheme.secondaryText} />
+          </TouchableOpacity>
 
           <TouchableOpacity
             onPress={handleNextPage}
@@ -610,6 +623,15 @@ export default function ReaderScreen() {
         totalPages={effectiveTotalPages}
         onClose={() => setShowTocModal(false)}
         onSelectPage={handleJumpToPage}
+      />
+
+      {/* Go To Page Modal */}
+      <GoToPageModal
+        visible={showGoToModal}
+        currentPage={currentPage}
+        totalPages={effectiveTotalPages}
+        onClose={() => setShowGoToModal(false)}
+        onJump={handleJumpToPage}
       />
 
       {/* In-Book Full-Text Search Modal */}
@@ -674,6 +696,7 @@ export default function ReaderScreen() {
         visible={showOverflowModal}
         onClose={() => setShowOverflowModal(false)}
         onOpenToc={() => setShowTocModal(true)}
+        onOpenGoTo={() => setShowGoToModal(true)}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenNotes={() => setShowNotesModal(true)}
         onOpenAudio={() => setShowAudioStudio(true)}
@@ -794,6 +817,15 @@ const styles = StyleSheet.create({
   bottomPageText: {
     fontSize: 12,
     fontWeight: '500',
+  },
+  gotoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   toastCard: {
     position: 'absolute',
