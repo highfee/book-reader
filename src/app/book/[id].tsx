@@ -309,11 +309,7 @@ export default function BookDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <SafeAreaView style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#D97706" />
-      </SafeAreaView>
-    );
+    return <BookDetailSkeleton />;
   }
 
   if (!book) {
@@ -364,13 +360,8 @@ export default function BookDetailScreen() {
         <Text numberOfLines={1} style={styles.navTitle}>
           {book.title}
         </Text>
-        <TouchableOpacity
-          style={styles.navBtn}
-          onPress={() => setShowShelfModal(true)}
-          accessibilityLabel="Add to Shelf"
-        >
-          <Bookmark size={20} color="#FFFFFF" />
-        </TouchableOpacity>
+        {/* Shelving has one home: the labelled chip in the title block. */}
+        <View style={styles.navBtn} />
       </View>
 
       <ScrollView
@@ -387,23 +378,9 @@ export default function BookDetailScreen() {
               <Text style={styles.inactiveBannerTitle}>Welcome Back</Text>
             </View>
             <Text style={styles.inactiveBannerText}>
-              It has been over a day since you last turned a page. Catch up instantly with key
-              milestones up to page {currentPage} without spoilers.
+              It has been over a day since you last turned a page. Use “Generate Recap” below to
+              catch up on key milestones up to page {currentPage} without spoilers.
             </Text>
-            <TouchableOpacity
-              style={styles.quickRecapBtn}
-              onPress={handleGenerateRecap}
-              disabled={generatingRecap}
-            >
-              {generatingRecap ? (
-                <ActivityIndicator size="small" color="#92400E" />
-              ) : (
-                <>
-                  <Sparkles size={14} color="#92400E" style={{ marginRight: 6 }} />
-                  <Text style={styles.quickRecapBtnText}>Recap Where I Left Off</Text>
-                </>
-              )}
-            </TouchableOpacity>
           </View>
         )}
 
@@ -554,9 +531,6 @@ export default function BookDetailScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <BookOpen size={17} color="#D97706" style={{ marginRight: 8 }} />
               <Text style={styles.cardTitle}>Reading Progress</Text>
-            </View>
-            <View style={styles.percentBadge}>
-              <Text style={styles.percentBadgeText}>{percent}% Complete</Text>
             </View>
           </View>
 
@@ -784,14 +758,6 @@ export default function BookDetailScreen() {
                 </>
               )}
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.luxuryBtn, { flex: 1, backgroundColor: '#D84A6A' }]}
-              onPress={handleStartReading}
-            >
-              <Sparkles size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={[styles.luxuryBtnText, { color: '#FFFFFF' }]}>Ask in Reader</Text>
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -981,19 +947,6 @@ const styles = StyleSheet.create({
     color: '#D1D5DB',
     lineHeight: 17,
     marginBottom: 10,
-  },
-  quickRecapBtn: {
-    backgroundColor: 'rgba(217, 119, 6, 0.25)',
-    borderRadius: 8,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickRecapBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#F59E0B',
   },
   heroSection: {
     alignItems: 'center',

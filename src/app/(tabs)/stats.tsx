@@ -29,6 +29,7 @@ import {
   Play,
 } from 'lucide-react-native';
 import { BookRepository } from '@/services/database/bookRepository';
+import { ReadingNotificationService } from '@/services/notifications/readingNotificationService';
 import { ReadingStats, DailyReadingActivity, ReadingGoals, BookWithProgress } from '@/types/book';
 import { ReadingHeatmap } from '@/components/stats/ReadingHeatmap';
 import { GoalSettingsModal } from '@/components/stats/GoalSettingsModal';
@@ -86,6 +87,7 @@ export default function StatsScreen() {
   const handleSaveGoals = async (newGoals: ReadingGoals) => {
     await BookRepository.saveReadingGoals(newGoals);
     setGoals(newGoals);
+    await ReadingNotificationService.scheduleDailyReminderDaemon();
   };
 
   const formatReadingTime = (seconds: number): string => {
@@ -316,20 +318,11 @@ export default function StatsScreen() {
                 <Text style={styles.targetFooterText}>
                   {isDailyGoalMet
                     ? 'Fantastic work! You have satisfied your daily reading ambition.'
-                    : `Read ${Math.max(0, dailyTargetMins - todayMinutes)} more minutes today to sustain your streak.`}
+                    : 'Sustain your streak by closing out the remaining minutes.'}
                 </Text>
 
-                {/* Target Sprint & Reminder Actions */}
+                {/* Sprint action: reminders and goal editing live in the header */}
                 <View style={styles.targetActionRow}>
-                  <TouchableOpacity
-                    style={styles.targetActionBtn}
-                    onPress={() => setNotificationModalVisible(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Bell size={13} color="#D84A6A" style={{ marginRight: 6 }} />
-                    <Text style={styles.targetActionText}>Reminder Alerts</Text>
-                  </TouchableOpacity>
-
                   <TouchableOpacity
                     style={[styles.targetActionBtn, styles.targetActionBtnPrimary]}
                     onPress={() => {
@@ -390,13 +383,6 @@ export default function StatsScreen() {
                     </Text>
                   </View>
                 </View>
-
-                <TouchableOpacity
-                  onPress={() => setGoalModalVisible(true)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                >
-                  <Text style={styles.editLinkText}>Adjust</Text>
-                </TouchableOpacity>
               </View>
 
               <View style={styles.yearlyProgressBarWrap}>
@@ -786,11 +772,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     marginTop: 1,
-  },
-  editLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#D84A6A',
   },
   yearlyProgressBarWrap: {
     marginBottom: 8,

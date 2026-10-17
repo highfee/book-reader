@@ -480,7 +480,19 @@ export default function LibraryScreen() {
         {activeTab === 'all' && !selectedTag && !searchQuery.trim() && (
           <View style={styles.pocketsGrid}>
             {/* Pocket 1: BOOKS (EPUBs) */}
-            <View style={styles.pocketCard}>
+            <TouchableOpacity
+              style={styles.pocketCard}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (epubBooks.length === 1) {
+                  handleOpenBook(epubBooks[0].id);
+                } else {
+                  setActiveTab('all');
+                  setSelectedTag(null);
+                  scrollToBooksSection();
+                }
+              }}
+            >
               {/* Peek-out Book Covers behind the glass pocket */}
               <View style={styles.pocketCoversBackdrop}>
                 <TouchableOpacity
@@ -526,46 +538,43 @@ export default function LibraryScreen() {
               </View>
 
               {/* Frosted Glass Acrylic Pocket with Corner Rivets */}
-              <TouchableOpacity
-                style={styles.glassPocketFront}
-                onPress={() => {
-                  if (epubBooks.length === 1) {
-                    handleOpenBook(epubBooks[0].id);
-                  } else {
-                    setActiveTab('all');
-                    setSelectedTag(null);
-                    scrollToBooksSection();
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.glassPocketFront}>
                 <View style={[styles.rivet, styles.rivetTopLeft]} />
                 <View style={[styles.rivet, styles.rivetTopRight]} />
                 <View style={[styles.rivet, styles.rivetBottomLeft]} />
                 <View style={[styles.rivet, styles.rivetBottomRight]} />
-              </TouchableOpacity>
+              </View>
 
-              {/* Label Under Pocket */}
-              <TouchableOpacity
-                style={styles.pocketMeta}
-                onPress={() => {
-                  if (epubBooks.length === 1) {
-                    handleOpenBook(epubBooks[0].id);
-                  } else {
-                    setActiveTab('all');
-                    setSelectedTag(null);
-                    scrollToBooksSection();
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              {/* Label Under Pocket (the pocket itself is the tap target) */}
+              <View style={styles.pocketMeta}>
                 <Text style={styles.pocketTitle}>BOOKS</Text>
                 <Text style={styles.pocketCount}>{counts.epubs} ITEMS</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
 
             {/* Pocket 2: MAGAZINES */}
-            <View style={styles.pocketCard}>
+            <TouchableOpacity
+              style={styles.pocketCard}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (magazineBooks.length > 0) {
+                  const tag = magazineBooks[0].genreTags?.find((t) =>
+                    t.toLowerCase().includes('magazine') || t.toLowerCase().includes('self-help')
+                  );
+                  setSelectedTag(tag || null);
+                  scrollToBooksSection();
+                } else {
+                  Alert.alert(
+                    'Magazines & Periodicals',
+                    'No magazines in your collection yet. Would you like to import files now?',
+                    [
+                      { text: 'Import Files', onPress: handleImportFiles },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }
+              }}
+            >
               <View style={styles.pocketCoversBackdrop}>
                 <TouchableOpacity
                   style={[styles.miniCover, styles.miniCoverLeft, { backgroundColor: '#27272A' }]}
@@ -616,63 +625,42 @@ export default function LibraryScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.glassPocketFront}
-                onPress={() => {
-                  if (magazineBooks.length > 0) {
-                    const tag = magazineBooks[0].genreTags?.find((t) =>
-                      t.toLowerCase().includes('magazine') || t.toLowerCase().includes('self-help')
-                    );
-                    setSelectedTag(tag || null);
-                    scrollToBooksSection();
-                  } else {
-                    Alert.alert(
-                      'Magazines & Periodicals',
-                      'No magazines in your collection yet. Would you like to import files now?',
-                      [
-                        { text: 'Import Files', onPress: handleImportFiles },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.glassPocketFront}>
                 <View style={[styles.rivet, styles.rivetTopLeft]} />
                 <View style={[styles.rivet, styles.rivetTopRight]} />
                 <View style={[styles.rivet, styles.rivetBottomLeft]} />
                 <View style={[styles.rivet, styles.rivetBottomRight]} />
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.pocketMeta}
-                onPress={() => {
-                  if (magazineBooks.length > 0) {
-                    const tag = magazineBooks[0].genreTags?.find((t) =>
-                      t.toLowerCase().includes('magazine') || t.toLowerCase().includes('self-help')
-                    );
-                    setSelectedTag(tag || null);
-                    scrollToBooksSection();
-                  } else {
-                    Alert.alert(
-                      'Magazines & Periodicals',
-                      'No magazines in your collection yet. Would you like to import files now?',
-                      [
-                        { text: 'Import Files', onPress: handleImportFiles },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.pocketMeta}>
                 <Text style={styles.pocketTitle}>MAGAZINES</Text>
                 <Text style={styles.pocketCount}>{counts.magazines} ITEMS</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
 
             {/* Pocket 3: ARTICLES */}
-            <View style={styles.pocketCard}>
+            <TouchableOpacity
+              style={styles.pocketCard}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (articleBooks.length > 0) {
+                  const tag = articleBooks[0].genreTags?.find((t) =>
+                    t.toLowerCase().includes('article') || t.toLowerCase().includes('productivity')
+                  );
+                  setSelectedTag(tag || null);
+                  scrollToBooksSection();
+                } else {
+                  Alert.alert(
+                    'Articles & Essays',
+                    'No articles in your collection yet. Would you like to import files now?',
+                    [
+                      { text: 'Import Files', onPress: handleImportFiles },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }
+              }}
+            >
               <View style={styles.pocketCoversBackdrop}>
                 <TouchableOpacity
                   style={[styles.miniCover, styles.miniCoverLeft, { backgroundColor: '#1C1917' }]}
@@ -723,63 +711,41 @@ export default function LibraryScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.glassPocketFront}
-                onPress={() => {
-                  if (articleBooks.length > 0) {
-                    const tag = articleBooks[0].genreTags?.find((t) =>
-                      t.toLowerCase().includes('article') || t.toLowerCase().includes('productivity')
-                    );
-                    setSelectedTag(tag || null);
-                    scrollToBooksSection();
-                  } else {
-                    Alert.alert(
-                      'Articles & Essays',
-                      'No articles in your collection yet. Would you like to import files now?',
-                      [
-                        { text: 'Import Files', onPress: handleImportFiles },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.glassPocketFront}>
                 <View style={[styles.rivet, styles.rivetTopLeft]} />
                 <View style={[styles.rivet, styles.rivetTopRight]} />
                 <View style={[styles.rivet, styles.rivetBottomLeft]} />
                 <View style={[styles.rivet, styles.rivetBottomRight]} />
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.pocketMeta}
-                onPress={() => {
-                  if (articleBooks.length > 0) {
-                    const tag = articleBooks[0].genreTags?.find((t) =>
-                      t.toLowerCase().includes('article') || t.toLowerCase().includes('productivity')
-                    );
-                    setSelectedTag(tag || null);
-                    scrollToBooksSection();
-                  } else {
-                    Alert.alert(
-                      'Articles & Essays',
-                      'No articles in your collection yet. Would you like to import files now?',
-                      [
-                        { text: 'Import Files', onPress: handleImportFiles },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.pocketMeta}>
                 <Text style={styles.pocketTitle}>ARTICLES</Text>
                 <Text style={styles.pocketCount}>{counts.articles} ITEMS</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
 
             {/* Pocket 4: DOCUMENTS (PDFs) */}
-            <View style={styles.pocketCard}>
+            <TouchableOpacity
+              style={styles.pocketCard}
+              activeOpacity={0.85}
+              onPress={() => {
+                if (pdfBooks.length === 1) {
+                  handleOpenBook(pdfBooks[0].id);
+                } else if (pdfBooks.length > 1) {
+                  setActiveTab('pdfs');
+                  scrollToBooksSection();
+                } else {
+                  Alert.alert(
+                    'PDF Documents',
+                    'No PDF documents found in your library. Would you like to import a PDF file now?',
+                    [
+                      { text: 'Import PDF', onPress: handleImportFiles },
+                      { text: 'Cancel', style: 'cancel' },
+                    ]
+                  );
+                }
+              }}
+            >
               <View style={styles.pocketCoversBackdrop}>
                 <TouchableOpacity
                   style={[styles.miniCover, styles.miniCoverLeft, { backgroundColor: '#312E81' }]}
@@ -830,58 +796,18 @@ export default function LibraryScreen() {
                 </TouchableOpacity>
               </View>
 
-              <TouchableOpacity
-                style={styles.glassPocketFront}
-                onPress={() => {
-                  if (pdfBooks.length === 1) {
-                    handleOpenBook(pdfBooks[0].id);
-                  } else if (pdfBooks.length > 1) {
-                    setActiveTab('pdfs');
-                    scrollToBooksSection();
-                  } else {
-                    Alert.alert(
-                      'PDF Documents',
-                      'No PDF documents found in your library. Would you like to import a PDF file now?',
-                      [
-                        { text: 'Import PDF', onPress: handleImportFiles },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.glassPocketFront}>
                 <View style={[styles.rivet, styles.rivetTopLeft]} />
                 <View style={[styles.rivet, styles.rivetTopRight]} />
                 <View style={[styles.rivet, styles.rivetBottomLeft]} />
                 <View style={[styles.rivet, styles.rivetBottomRight]} />
-              </TouchableOpacity>
+              </View>
 
-              <TouchableOpacity
-                style={styles.pocketMeta}
-                onPress={() => {
-                  if (pdfBooks.length === 1) {
-                    handleOpenBook(pdfBooks[0].id);
-                  } else if (pdfBooks.length > 1) {
-                    setActiveTab('pdfs');
-                    scrollToBooksSection();
-                  } else {
-                    Alert.alert(
-                      'PDF Documents',
-                      'No PDF documents found in your library. Would you like to import a PDF file now?',
-                      [
-                        { text: 'Import PDF', onPress: handleImportFiles },
-                        { text: 'Cancel', style: 'cancel' },
-                      ]
-                    );
-                  }
-                }}
-                activeOpacity={0.85}
-              >
+              <View style={styles.pocketMeta}>
                 <Text style={styles.pocketTitle}>DOCUMENTS</Text>
                 <Text style={styles.pocketCount}>{counts.pdfs} ITEMS</Text>
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
           </View>
         )}
 

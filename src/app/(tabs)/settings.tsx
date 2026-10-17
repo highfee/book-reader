@@ -25,7 +25,6 @@ import {
   BookOpen,
   Type,
   Palette,
-  Volume2,
   Download,
   Check,
   AlertTriangle,
@@ -63,9 +62,6 @@ export default function SettingsScreen() {
   const [readerTheme, setReaderTheme] = useState('parchment');
   const [readerFont, setReaderFont] = useState('serif');
   const [readerFontSize, setReaderFontSize] = useState('18');
-  const [aiPersona, setAiPersona] = useState('scholar');
-  const [strictSpoilers, setStrictSpoilers] = useState(true);
-  const [ttsSpeed, setTtsSpeed] = useState('1.0');
 
   // Reset confirmation state
   const [showResetModal, setShowResetModal] = useState(false);
@@ -95,15 +91,6 @@ export default function SettingsScreen() {
 
       const size = await BookRepository.getSetting('reader_default_font_size');
       if (size) setReaderFontSize(size);
-
-      const persona = await BookRepository.getSetting('ai_persona');
-      if (persona) setAiPersona(persona);
-
-      const spoilers = await BookRepository.getSetting('strict_spoilers');
-      if (spoilers !== null) setStrictSpoilers(spoilers === 'true');
-
-      const speed = await BookRepository.getSetting('tts_speed');
-      if (speed) setTtsSpeed(speed);
     } catch {
       // Non-blocking
     }
@@ -134,12 +121,6 @@ export default function SettingsScreen() {
   const handleSaveSetting = async (key: string, value: string, setter: (v: any) => void) => {
     setter(value);
     await BookRepository.setSetting(key, value);
-  };
-
-  const handleToggleSpoilers = async () => {
-    const nextVal = !strictSpoilers;
-    setStrictSpoilers(nextVal);
-    await BookRepository.setSetting('strict_spoilers', nextVal.toString());
   };
 
   const performResetDatabase = async () => {
@@ -256,9 +237,10 @@ export default function SettingsScreen() {
             <View style={styles.optionsRow}>
               {[
                 { id: 'parchment', label: 'Parchment', color: '#FAF8F5', border: '#E7E5E4' },
-                { id: 'cream', label: 'Warm Cream', color: '#FFFBEB', border: '#FDE68A' },
                 { id: 'sepia', label: 'Sepia', color: '#FBF0D9', border: '#E2CEB0' },
+                { id: 'nordic', label: 'Nordic', color: '#F1F5F9', border: '#CBD5E1' },
                 { id: 'obsidian', label: 'Obsidian', color: '#18181B', border: '#3F3F46', textLight: true },
+                { id: 'oled', label: 'OLED Black', color: '#000000', border: '#27272A', textLight: true },
               ].map((theme) => {
                 const isSelected = readerTheme === theme.id;
                 return (
@@ -365,61 +347,6 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
-          {/* Persona Selection */}
-          <View style={{ marginBottom: 12 }}>
-            <Text style={[styles.settingLabel, { marginBottom: 8 }]}>Companion Persona</Text>
-            <View style={styles.optionsRow}>
-              {[
-                { id: 'companion', label: 'Companion', desc: 'Warm & reflective chat' },
-                { id: 'scholar', label: 'Scholar', desc: 'Literary & historical depth' },
-              ].map((p) => {
-                const isSelected = aiPersona === p.id;
-                return (
-                  <TouchableOpacity
-                    key={p.id}
-                    onPress={() => handleSaveSetting('ai_persona', p.id, setAiPersona)}
-                    style={[styles.choicePill, isSelected && styles.choicePillActive]}
-                  >
-                    <Text style={[styles.choicePillText, isSelected && styles.choicePillTextActive]}>
-                      {p.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {/* Strict Spoiler Guard Toggle */}
-          <TouchableOpacity
-            style={styles.toggleRow}
-            onPress={handleToggleSpoilers}
-            activeOpacity={0.7}
-          >
-            <View style={{ flex: 1, marginRight: 12 }}>
-              <Text style={styles.settingLabel}>Strict Spoiler Locking</Text>
-              <Text style={styles.settingSubtext}>
-                Queries strictly seal upcoming chapter text. Companion only ever knows what you have turned.
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.toggleTrack,
-                strictSpoilers ? styles.toggleTrackActive : styles.toggleTrackInactive,
-              ]}
-            >
-              <View
-                style={[
-                  styles.toggleThumb,
-                  strictSpoilers ? styles.toggleThumbActive : styles.toggleThumbInactive,
-                ]}
-              />
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.divider} />
-
           {/* API Key Input */}
           <View style={{ paddingVertical: 4 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -488,31 +415,6 @@ export default function SettingsScreen() {
                 );
               })}
             </View>
-          </View>
-        </View>
-
-        {/* Text-to-speech Narration */}
-        <Text style={styles.sectionHeader}>TEXT-TO-SPEECH (TTS)</Text>
-        <View style={styles.card}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-            <Volume2 size={16} color="#D97706" style={{ marginRight: 6 }} />
-            <Text style={styles.settingLabel}>TTS Narration Pace</Text>
-          </View>
-          <View style={styles.optionsRow}>
-            {['0.8x', '1.0x', '1.2x', '1.5x'].map((speed) => {
-              const isSelected = ttsSpeed === speed;
-              return (
-                <TouchableOpacity
-                  key={speed}
-                  onPress={() => handleSaveSetting('tts_speed', speed, setTtsSpeed)}
-                  style={[styles.choicePill, isSelected && styles.choicePillActive]}
-                >
-                  <Text style={[styles.choicePillText, isSelected && styles.choicePillTextActive]}>
-                    {speed}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
           </View>
         </View>
 
@@ -799,12 +701,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  settingSubtext: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-    lineHeight: 15,
-  },
   optionsRow: {
     flexDirection: 'row',
     gap: 8,
@@ -847,37 +743,6 @@ const styles = StyleSheet.create({
   themePillText: {
     fontSize: 12,
     fontWeight: '500',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  toggleTrack: {
-    width: 44,
-    height: 24,
-    borderRadius: 12,
-    padding: 2,
-    justifyContent: 'center',
-  },
-  toggleTrackActive: {
-    backgroundColor: '#D97706',
-  },
-  toggleTrackInactive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-  },
-  toggleThumb: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-  },
-  toggleThumbActive: {
-    alignSelf: 'flex-end',
-  },
-  toggleThumbInactive: {
-    alignSelf: 'flex-start',
   },
   actionRow: {
     flexDirection: 'row',

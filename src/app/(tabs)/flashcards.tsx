@@ -558,12 +558,6 @@ export default function FlashcardsScreen() {
                             by {inferBookAuthor(deck.bookTitle, deck.author)}
                           </Text>
                         </View>
-
-                        {deck.dueCards > 0 && (
-                          <View style={styles.dueBadge}>
-                            <Text style={styles.dueBadgeText}>{deck.dueCards} Due</Text>
-                          </View>
-                        )}
                       </View>
 
                       <View style={styles.deckStatsRow}>
