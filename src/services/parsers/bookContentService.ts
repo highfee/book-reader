@@ -54,7 +54,7 @@ export class BookContentService {
 
     const container = sourceUri ? await PDFTextExtractor.detectContainer(sourceUri) : 'unknown';
     let isPdf = container === 'pdf';
-    let isZip = container === 'other';
+    let isZip = container === 'zip';
     if (container === 'unknown' && sourceUri) {
       const nameHint = `${sourceUri} ${bookTitle || ''}`.toLowerCase();
       isPdf = nameHint.includes('.pdf');
@@ -62,7 +62,7 @@ export class BookContentService {
     }
 
     // 1. Check if this is a PDF and extract the authentic page text for this specific page
-    if (sourceUri && !isZip && (isPdf || sourceUri.includes('.pdf') || sourceUri.startsWith('blob:') || sourceUri.startsWith('http') || sourceUri.startsWith('file:') || sourceUri.startsWith('content:'))) {
+    if (sourceUri && !isZip && container !== 'text' && (isPdf || sourceUri.includes('.pdf') || sourceUri.startsWith('blob:') || sourceUri.startsWith('http') || sourceUri.startsWith('file:') || sourceUri.startsWith('content:'))) {
       try {
         const authenticPdfText = await PDFTextExtractor.extractPageText(sourceUri, pageNumber, bookTitle);
         if (authenticPdfText && authenticPdfText.trim().length > 10) {
@@ -128,7 +128,7 @@ export class BookContentService {
       // Only plain text / HTML files can be paginated as a string. Decoding a
       // PDF or EPUB (a zip) just to discover that is expensive on large books.
       const container = await PDFTextExtractor.detectContainer(fileUri);
-      if (container === 'other' || container === 'pdf') return [];
+      if (container === 'zip' || container === 'pdf') return [];
 
       const raw = await SAFStorageService.readFile(fileUri, 'utf8');
       if (!raw || raw.length < 50) return [];

@@ -5,8 +5,8 @@ import { SAFStorageService } from '../storage/safStorage';
 const pageTextCache = new Map<string, string>();
 // Cache for loaded PDF.js documents on web
 const webPdfDocCache = new Map<string, any>();
-// Container sniff results, so an EPUB is not fed to PDF.js on every page turn
-const containerKindCache = new Map<string, 'pdf' | 'other'>();
+// Container sniff results, so a file is never handed to the wrong parser
+const containerKindCache = new Map<string, 'pdf' | 'zip' | 'text'>();
 
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // %PDF
 const ZIP_MAGIC = [0x50, 0x4b]; // PK.. (EPUB, and every other zip container)
@@ -54,11 +54,11 @@ function getWebPdfJs(): Promise<any> {
 
 export class PDFTextExtractor {
   /**
-   * Reads the first bytes of a file to tell a PDF apart from an EPUB before any
-   * parser is asked to work. Returns 'unknown' when the platform cannot expose
-   * the bytes, in which case callers keep their previous behaviour.
+   * Reads the first bytes of a file so callers route it to the right parser
+   * instead of guessing from a URI that has no extension. Returns 'unknown'
+   * when the platform cannot expose the bytes, keeping previous behaviour.
    */
-  static async detectContainer(fileUri: string): Promise<'pdf' | 'other' | 'unknown'> {
+  static async detectContainer(fileUri: string): Promise<'pdf' | 'zip' | 'text' | 'unknown'> {
     const cached = containerKindCache.get(fileUri);
     if (cached) return cached;
 
@@ -70,12 +70,13 @@ export class PDFTextExtractor {
     }
 
     if (!head || head.length < 4) return 'unknown';
-    const kind: 'pdf' | 'other' | 'unknown' = matchesMagic(head, PDF_MAGIC)
+
+    const kind: 'pdf' | 'zip' | 'text' = matchesMagic(head, PDF_MAGIC)
       ? 'pdf'
       : matchesMagic(head, ZIP_MAGIC)
-      ? 'other'
-      : 'unknown';
-    if (kind !== 'unknown') containerKindCache.set(fileUri, kind);
+      ? 'zip'
+      : 'text';
+    containerKindCache.set(fileUri, kind);
     return kind;
   }
 
@@ -89,7 +90,8 @@ export class PDFTextExtractor {
   ): Promise<string | null> {
     if (!fileUri || pageNumber < 1) return null;
 
-    if ((await this.detectContainer(fileUri)) === 'other') return null;
+    const container = await this.detectContainer(fileUri);
+    if (container === 'zip' || container === 'text') return null;
 
     const cacheKey = `${fileUri}#${pageNumber}`;
     if (pageTextCache.has(cacheKey)) {
