@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, Text, TouchableOpacity, ScrollView, Platform, Dimensions, Pressable } from 'react-native';
 import {
   AlertCircle,
   BookOpen,
@@ -116,6 +116,16 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
   const onPageTextExtractedRef = useRef(onPageTextExtracted);
   onPageTextExtractedRef.current = onPageTextExtracted;
   const extractedUriRef = useRef<string | null>(null);
+
+  // Escape closes the text drawer, matching how desktop readers dismiss panels
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showTextDrawer || typeof document === 'undefined') return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowTextDrawer(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showTextDrawer]);
 
   // Dynamically extract the authentic PDF total page count from the file (once per URI)
   useEffect(() => {
@@ -338,6 +348,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
 
             {/* Floating Page Text & Tooltip Drawer */}
             {showTextDrawer && (
+              <Pressable style={styles.drawerScrim} onPress={() => setShowTextDrawer(false)}>
               <View style={styles.pdfTextDrawer} pointerEvents="auto">
                 <View style={styles.drawerHeader}>
                   <View style={styles.drawerHeaderLeft}>
@@ -359,7 +370,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
                   Highlight any text below to trigger notes, dictionary meaning, or ask AI:
                 </Text>
 
-                <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={true}>
+                <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={false}>
                   {pageData && pageData.paragraphs.length > 0 ? (
                     pageData.paragraphs.map((p, idx) => (
                       <View key={idx} style={styles.drawerParagraphWrapper}>
@@ -391,6 +402,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
                   )}
                 </ScrollView>
               </View>
+              </Pressable>
             )}
           </View>
         ) : (
@@ -665,6 +677,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  drawerScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    zIndex: 109,
   },
   pdfTextDrawer: {
     position: 'absolute',

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Text,
   TouchableOpacity,
+  Pressable,
   ScrollView,
 } from 'react-native';
 import Pdf from 'react-native-pdf';
@@ -189,6 +190,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
 
       {/* Floating Page Text & Tooltip Drawer */}
       {showTextDrawer && (
+        <Pressable style={styles.drawerScrim} onPress={() => setShowTextDrawer(false)}>
         <View style={styles.pdfTextDrawer} pointerEvents="auto">
           <View style={styles.drawerHeader}>
             <View style={styles.drawerHeaderLeft}>
@@ -210,7 +212,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
             Highlight or select any text below to trigger notes, dictionary meaning, or ask AI:
           </Text>
 
-          <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={true}>
+          <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={false}>
             {pageData && !pageData.isAuthentic ? (
               <Text style={styles.drawerEmptyText}>
                 This page has no extractable text layer (it may be a scanned image), so narration and
@@ -242,6 +244,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
             )}
           </ScrollView>
         </View>
+        </Pressable>
       )}
     </View>
   );
@@ -359,6 +362,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  drawerScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    zIndex: 109,
   },
   pdfTextDrawer: {
     position: 'absolute',
