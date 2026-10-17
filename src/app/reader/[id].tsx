@@ -2,11 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,16 +13,8 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  Sun,
-  Moon,
-  Type,
-  Maximize2,
-  StickyNote,
-  Search,
-  List,
   Headphones,
   Sliders,
-  Target,
   MoreVertical,
   ChevronsUpDown,
 } from 'lucide-react-native';
@@ -44,7 +34,6 @@ import { PDFMetadataService } from '@/services/parsers/pdfMetadata';
 import { PDFReaderView } from '@/components/reader/PDFReaderView';
 import { EPUBReaderView } from '@/components/reader/EPUBReaderView';
 import { SelectionTooltip, SelectionCoords } from '@/components/reader/SelectionTooltip';
-import { TextExtractorService } from '@/services/parsers/textExtractor';
 import { BookContentService } from '@/services/parsers/bookContentService';
 import { AudioStudioModal } from '@/components/reader/AudioStudioModal';
 import { AudioMiniPlayer } from '@/components/reader/AudioMiniPlayer';
@@ -209,54 +198,51 @@ export default function ReaderScreen() {
 
   const hideTargetHUD = useCallback(() => persistHudVisibility(false), [persistHudVisibility]);
 
-  const maxPages = totalPages > 0 ? totalPages : (book?.totalPages && book.totalPages > 0 ? book.totalPages : 1);
+  const effectiveTotalPages =
+    totalPages > 0 ? totalPages : book?.totalPages && book.totalPages > 0 ? book.totalPages : 1;
 
   const handleJumpToPage = useCallback(async (pageNumber: number) => {
     recordUserInteraction();
-    const target = Math.max(1, Math.min(pageNumber, maxPages));
-    await updatePageProgress(target, undefined, maxPages);
+    const target = Math.max(1, Math.min(pageNumber, effectiveTotalPages));
+    await updatePageProgress(target, undefined, effectiveTotalPages);
     triggerToast(`Jumped to Page ${target}`);
-  }, [maxPages, updatePageProgress, recordUserInteraction, triggerToast]);
+  }, [effectiveTotalPages, updatePageProgress, recordUserInteraction, triggerToast]);
 
   const handleNextPage = useCallback(async () => {
     recordUserInteraction();
-    const next = Math.min(maxPages, currentPage + 1);
-    await updatePageProgress(next, undefined, maxPages);
-  }, [maxPages, currentPage, updatePageProgress, recordUserInteraction]);
+    const next = Math.min(effectiveTotalPages, currentPage + 1);
+    await updatePageProgress(next, undefined, effectiveTotalPages);
+  }, [effectiveTotalPages, currentPage, updatePageProgress, recordUserInteraction]);
 
   const handlePrevPage = useCallback(async () => {
     recordUserInteraction();
     const prev = Math.max(1, currentPage - 1);
-    await updatePageProgress(prev, undefined, maxPages);
-  }, [maxPages, currentPage, updatePageProgress, recordUserInteraction]);
+    await updatePageProgress(prev, undefined, effectiveTotalPages);
+  }, [effectiveTotalPages, currentPage, updatePageProgress, recordUserInteraction]);
 
   const handlePageChange = useCallback(
     (page: number, total?: number) => {
-      updatePageProgress(page, undefined, total || maxPages);
+      updatePageProgress(page, undefined, total || effectiveTotalPages);
     },
-    [updatePageProgress, maxPages]
+    [updatePageProgress, effectiveTotalPages]
   );
 
   const handleLoadComplete = useCallback(
     (total?: number) => {
       if (!book) return;
-      const nextTotal = total && total > 0 ? total : maxPages;
+      const nextTotal = total && total > 0 ? total : effectiveTotalPages;
       if (total && total > 0 && total !== book.totalPages) {
         setBook((prev) => (prev ? { ...prev, totalPages: total } : null));
         BookRepository.updateBookTotalPages(book.id, total).catch(() => {});
       }
       updatePageProgress(currentPage, undefined, nextTotal);
     },
-    [book, maxPages, currentPage, updatePageProgress]
+    [book, effectiveTotalPages, currentPage, updatePageProgress]
   );
 
   const handlePageTextExtracted = useCallback((text: string) => {
     setCurrentPageText(text || '');
   }, []);
-
-  const openAudioStudio = useCallback(() => setShowAudioStudio(true), []);
-
-  const openGoToModal = useCallback(() => setShowGoToModal(true), []);
 
   const handleTextSelected = useCallback((text: string, coords?: SelectionCoords | null) => {
     recordUserInteraction();
@@ -328,20 +314,7 @@ export default function ReaderScreen() {
     }
   };
 
-  const cycleTheme = () => {
-    const themeKeys: PaperThemeId[] = ['parchment', 'sepia', 'nordic', 'obsidian', 'oled'];
-    const nextIdx = (themeKeys.indexOf(theme) + 1) % themeKeys.length;
-    setTheme(themeKeys[nextIdx]);
-  };
-
-  const cycleFontSize = () => {
-    if (fontSize === 16) setFontSize(18);
-    else if (fontSize === 18) setFontSize(22);
-    else setFontSize(16);
-  };
-
   const currentTheme = PAPER_THEMES[theme] || PAPER_THEMES.sepia;
-  const effectiveTotalPages = totalPages > 0 ? totalPages : (book?.totalPages && book.totalPages > 0 ? book.totalPages : 1);
   const progressPercent = Math.min(100, Math.round((currentPage / effectiveTotalPages) * 100));
 
   if (loading) {
@@ -412,18 +385,14 @@ export default function ReaderScreen() {
           <ArrowLeft size={22} color={currentTheme.text} />
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.titleWrapper}
-          onPress={() => setShowTocModal(true)}
-          activeOpacity={0.7}
-        >
+        <View style={styles.titleWrapper}>
           <Text numberOfLines={1} style={[styles.bookTitle, { color: currentTheme.text }]}>
             {book.title}
           </Text>
           <Text style={[styles.pageIndicator, { color: currentTheme.secondaryText }]}>
-            Page {currentPage} of {effectiveTotalPages} • {progressPercent}%
+            {progressPercent}% read
           </Text>
-        </TouchableOpacity>
+        </View>
 
         <View style={styles.headerRight}>
           {/* Typography, Paper Themes & Font Size */}
@@ -496,11 +465,7 @@ export default function ReaderScreen() {
           onLoadComplete={handleLoadComplete}
           onTextSelected={handleTextSelected}
           onClearSelection={handleClearSelection}
-          onOpenAudioStudio={openAudioStudio}
           onPageTextExtracted={handlePageTextExtracted}
-          onNextPage={handleNextPage}
-          onPrevPage={handlePrevPage}
-          onRequestGoToPage={openGoToModal}
         />
       ) : (
         <EPUBReaderView
@@ -696,13 +661,8 @@ export default function ReaderScreen() {
         visible={showOverflowModal}
         onClose={() => setShowOverflowModal(false)}
         onOpenToc={() => setShowTocModal(true)}
-        onOpenGoTo={() => setShowGoToModal(true)}
         onOpenSearch={() => setShowSearchModal(true)}
         onOpenNotes={() => setShowNotesModal(true)}
-        onOpenAudio={() => setShowAudioStudio(true)}
-        onOpenTheme={() => setShowThemeModal(true)}
-        onCycleTheme={cycleTheme}
-        isDarkTheme={theme === 'obsidian' || theme === 'oled'}
         showTargetHUD={showTargetHUD}
         onToggleTargetHUD={() => persistHudVisibility(!showTargetHUD)}
         onOpenReminders={() => setShowReminderModal(true)}

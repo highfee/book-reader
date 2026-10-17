@@ -4,9 +4,6 @@ import {
   AlertCircle,
   BookOpen,
   Upload,
-  ChevronLeft,
-  ChevronRight,
-  Headphones,
   Highlighter,
   Sparkles,
   X,
@@ -26,11 +23,7 @@ interface PDFReaderViewProps {
   onLoadComplete?: (totalPages: number) => void;
   onTextSelected?: (text: string, coords?: any) => void;
   onClearSelection?: () => void;
-  onOpenAudioStudio?: () => void;
   onPageTextExtracted?: (text: string) => void;
-  onNextPage?: () => void;
-  onPrevPage?: () => void;
-  onRequestGoToPage?: () => void;
   bookTitle?: string;
   fileName?: string;
   bookId?: string;
@@ -48,11 +41,7 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
   onLoadComplete,
   onTextSelected,
   onClearSelection,
-  onOpenAudioStudio,
   onPageTextExtracted,
-  onNextPage,
-  onPrevPage,
-  onRequestGoToPage,
   bookTitle = 'PDF Document',
   fileName,
   bookId,
@@ -291,48 +280,9 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
               title={bookTitle}
             />
 
-            {/* Floating Original PDF Companion HUD (Page Number, TTS, Text & Tooltip) */}
+            {/* Page navigation and audio live in the reader chrome; this bar only
+                carries the per-page text panel, which has no other home. */}
             <View style={styles.pdfOverlayBar} pointerEvents="box-none">
-              {/* Page Number & Navigation Pill */}
-              <View style={styles.pdfPagePill} pointerEvents="auto">
-                <TouchableOpacity
-                  onPress={onPrevPage}
-                  disabled={currentPage <= 1}
-                  style={[styles.pdfStepBtn, currentPage <= 1 && styles.pdfStepBtnDisabled]}
-                >
-                  <ChevronLeft size={16} color={currentPage <= 1 ? '#6B7280' : '#FFFFFF'} />
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={onRequestGoToPage}
-                  disabled={!onRequestGoToPage}
-                  activeOpacity={0.7}
-                  accessibilityLabel="Go to page"
-                >
-                  <Text style={styles.pdfPageText}>
-                    Page {currentPage} of {pdfTotalPages}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={onNextPage}
-                  disabled={currentPage >= pdfTotalPages}
-                  style={[styles.pdfStepBtn, currentPage >= pdfTotalPages && styles.pdfStepBtnDisabled]}
-                >
-                  <ChevronRight size={16} color={currentPage >= pdfTotalPages ? '#6B7280' : '#FFFFFF'} />
-                </TouchableOpacity>
-              </View>
-
-              {/* TTS / Listen Button on Original PDF */}
-              <TouchableOpacity
-                style={styles.pdfActionBtn}
-                onPress={onOpenAudioStudio}
-                activeOpacity={0.8}
-              >
-                <Headphones size={14} color="#F59E0B" style={{ marginRight: 5 }} />
-                <Text style={styles.pdfActionBtnText}>Listen</Text>
-              </TouchableOpacity>
-
               {/* Text & Tooltip Drawer Toggle on Original PDF */}
               <TouchableOpacity
                 style={[styles.pdfActionBtn, showTextDrawer && styles.pdfActionBtnActive]}
@@ -625,34 +575,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     zIndex: 100,
-  },
-  pdfPagePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(18, 19, 24, 0.94)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  pdfStepBtn: {
-    padding: 4,
-    borderRadius: 12,
-  },
-  pdfStepBtnDisabled: {
-    opacity: 0.3,
-  },
-  pdfPageText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginHorizontal: 8,
   },
   pdfActionBtn: {
     flexDirection: 'row',
