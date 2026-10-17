@@ -110,17 +110,23 @@ export default function ReaderScreen() {
         // Replace the guessed page count with the one the file really has,
         // otherwise the reader parks on page 1 for every book.
         const syncRealPageCount = async (realPages: number) => {
-          if (realPages > 0 && realPages !== data.totalPages) {
-            setBook((prev) => (prev ? { ...prev, totalPages: realPages } : null));
-            await BookRepository.updateBookTotalPages(data.id, realPages);
-            await updatePageProgress(currentPage, undefined, realPages);
-          }
+          if (realPages <= 0) return;
+          setBook((prev) => (prev ? { ...prev, totalPages: realPages } : null));
+          await updatePageProgress(currentPage, undefined, realPages);
+          BookRepository.updateBookTotalPages(data.id, realPages).catch(() => {});
         };
 
-        const pageCount =
-          data.format === 'pdf'
-            ? PDFMetadataService.getPdfPageCount(data.fileUri, data.fileName || data.title)
-            : BookContentService.countPages(data.title, data.fileUri);
+        // Trust the file over the recorded format: a page count read from the
+        // container works for EPUB and plain text, and PDFs fall through to the
+        // metadata reader.
+        const pageCount = (async () => {
+          const fromContent = await BookContentService.countPages(data.title, data.fileUri);
+          if (fromContent > 0) return fromContent;
+          if (data.format === 'pdf') {
+            return await PDFMetadataService.getPdfPageCount(data.fileUri, data.fileName || data.title);
+          }
+          return 0;
+        })();
 
         pageCount.then(syncRealPageCount).catch(() => {});
       }
@@ -524,6 +530,7 @@ export default function ReaderScreen() {
           currentPage={currentPage}
           totalPages={effectiveTotalPages}
           onPageChange={handlePageChange}
+          onLoadComplete={handleLoadComplete}
           onTextSelected={handleTextSelected}
           onClearSelection={handleClearSelection}
         />

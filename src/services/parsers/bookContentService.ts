@@ -9,6 +9,8 @@ export interface PageContent {
   quote?: string;
   /** False when the text was synthesized because extraction produced nothing. */
   isAuthentic: boolean;
+  /** Total pages the file really has, when extraction could know. */
+  pageCount?: number;
 }
 
 export interface TableOfContentsItem {
@@ -100,6 +102,7 @@ export class BookContentService {
             paragraphs: page.text.split('\n\n').filter((p) => p.trim().length > 0),
             quote: undefined,
             isAuthentic: true,
+            pageCount: epubPages.length,
           };
         }
       } catch (err) {
@@ -118,11 +121,12 @@ export class BookContentService {
         const chapterNum = Math.ceil(pageNumber / 8);
 
         return {
-          chapterBadge: `CHAPTER ${chapterNum} • PAGE ${pageNumber}`,
+          chapterBadge: `CHAPTER ${chapterNum} • PAGE ${pageNumber} OF ${filePages.length}`,
           chapterTitle: `Section ${pageNumber}: ${bookTitle}`,
           paragraphs: paragraphs.length > 0 ? paragraphs : [rawPageText],
           quote: paragraphs.length > 1 ? paragraphs[0].substring(0, 140) + '...' : undefined,
           isAuthentic: true,
+          pageCount: filePages.length,
         };
       }
     }

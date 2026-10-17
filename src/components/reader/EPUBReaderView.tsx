@@ -23,6 +23,7 @@ interface EPUBReaderViewProps {
   currentPage: number;
   totalPages: number;
   onPageChange: (page: number, totalPages: number) => void;
+  onLoadComplete?: (totalPages?: number) => void;
   onTextSelected?: (text: string, coords?: SelectionCoords | null) => void;
   onClearSelection?: () => void;
 }
@@ -37,6 +38,7 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
   currentPage,
   totalPages,
   onPageChange,
+  onLoadComplete,
   onTextSelected,
   onClearSelection,
 }) => {
@@ -73,18 +75,20 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
   useEffect(() => {
     let isCurrent = true;
     BookContentService.getPageContent(bookTitle, fileUri, currentPage, totalPages).then((content) => {
-      if (isCurrent) {
-        setPageData(content);
-        // Scroll smoothly back to top when advancing page
-        if (scrollViewRef.current) {
-          scrollViewRef.current.scrollTo({ y: 0, animated: true });
-        }
+      if (!isCurrent) return;
+      setPageData(content);
+      // The file knows how many pages it really has; the book row often still
+      // carries a guessed value, which leaves Prev/Next disabled on page 1.
+      onLoadComplete?.(content.pageCount);
+      // Scroll smoothly back to top when advancing page
+      if (scrollViewRef.current) {
+        scrollViewRef.current.scrollTo({ y: 0, animated: true });
       }
     });
     return () => {
       isCurrent = false;
     };
-  }, [bookTitle, fileUri, currentPage, totalPages]);
+  }, [bookTitle, fileUri, currentPage, totalPages, onLoadComplete]);;
 
   // Web keyboard arrow navigation (Left/Right)
   useEffect(() => {
