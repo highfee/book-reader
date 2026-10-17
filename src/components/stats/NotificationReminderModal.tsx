@@ -10,8 +10,8 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { Bell, Clock, Sparkles, Check, X, ShieldAlert, Award } from 'lucide-react-native';
-import { AppPalette, Fonts } from '@/constants/theme';
+import { Bell, Clock, Sparkles, X, ShieldAlert } from 'lucide-react-native';
+import { Fonts } from '@/constants/theme';
 import {
   ReadingNotificationService,
   NotificationSettings,

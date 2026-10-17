@@ -1,5 +1,3 @@
-import { AISummary } from '@/types/book';
-
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant';

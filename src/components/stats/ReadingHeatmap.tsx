@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import { Calendar, Flame, BookOpen, Clock, Sparkles } from 'lucide-react-native';
 import { DailyReadingActivity } from '@/types/book';
@@ -53,7 +52,7 @@ export const ReadingHeatmap: React.FC<ReadingHeatmapProps> = ({ activityMap }) =
   });
 
   // Compute 52-week grid (columns of 7 days, Sunday to Saturday)
-  const { weeks, activeDaysCount, totalYearMinutes, totalYearPages } = useMemo(() => {
+  const { weeks, activeDaysCount } = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -70,8 +69,6 @@ export const ReadingHeatmap: React.FC<ReadingHeatmapProps> = ({ activityMap }) =
     const weekColumns: WeekColumn[] = [];
     let lastLabeledMonth = -1;
     let activeDays = 0;
-    let totalSecs = 0;
-    let totalPages = 0;
 
     let cursor = new Date(gridStartDate);
 
@@ -87,8 +84,6 @@ export const ReadingHeatmap: React.FC<ReadingHeatmapProps> = ({ activityMap }) =
 
         if (activity && activity.durationSeconds > 0) {
           activeDays++;
-          totalSecs += activity.durationSeconds;
-          totalPages += activity.pagesRead;
         }
 
         // Check if this day is the 1st-7th of a new month to show month header
@@ -121,8 +116,6 @@ export const ReadingHeatmap: React.FC<ReadingHeatmapProps> = ({ activityMap }) =
     return {
       weeks: weekColumns,
       activeDaysCount: activeDays,
-      totalYearMinutes: Math.round(totalSecs / 60),
-      totalYearPages: totalPages,
     };
   }, [activityMap]);
 

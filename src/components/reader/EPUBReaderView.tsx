@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { View, StyleSheet, Platform, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Platform, Text, ScrollView } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { BookContentService, PageContent } from '@/services/parsers/bookContentService';
 import { PaperThemeId, PAPER_THEMES } from './ReaderThemeModal';

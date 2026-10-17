@@ -5,10 +5,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   useWindowDimensions,
-  Platform,
-  ScrollView,
 } from 'react-native';
-import { StickyNote, Sparkles, Copy, X, BookOpen } from 'lucide-react-native';
+import { StickyNote, Sparkles, X, BookOpen } from 'lucide-react-native';
 import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
 
 export interface SelectionCoords {

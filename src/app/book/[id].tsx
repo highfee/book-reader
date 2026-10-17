@@ -94,7 +94,6 @@ export default function BookDetailScreen() {
   const [book, setBook] = useState<BookWithProgress | null>(null);
   const [summaries, setSummaries] = useState<AISummary[]>([]);
   const [recommendations, setRecommendations] = useState<RecommendationResult[]>([]);
-  const [shelves, setShelves] = useState<Shelf[]>([]);
   const [assignedShelves, setAssignedShelves] = useState<Shelf[]>([]);
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [dueFlashcards, setDueFlashcards] = useState<Flashcard[]>([]);
@@ -167,7 +166,6 @@ export default function BookDetailScreen() {
 
         setSummaries(summs);
         setNotes(existingNotes);
-        setShelves(allShelves);
         setAssignedShelves(allShelves.filter((s) => bookShelfIds.includes(s.id)));
         setFlashcards(bookCards);
         setDueFlashcards(dueCards);
@@ -201,7 +199,6 @@ export default function BookDetailScreen() {
         BookRepository.getShelves(),
         BookRepository.getShelvesForBook(book.id),
       ]);
-      setShelves(allShelves);
       setAssignedShelves(allShelves.filter((s) => bookShelfIds.includes(s.id)));
     } catch (err) {
       console.error('Failed to reload shelves:', err);

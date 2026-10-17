@@ -8,7 +8,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 module.exports = async function (context) {
-  const { req, res, log, error } = context;
+  const { req, res, error } = context;
 
   if (req.method === 'OPTIONS') {
     return res.empty();

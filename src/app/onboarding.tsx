@@ -16,11 +16,7 @@ import {
   FolderOpen,
   FileText,
   Sparkles,
-  ArrowRight,
   X,
-  BookOpen,
-  Layers,
-  ChevronRight,
 } from 'lucide-react-native';
 import { useLibraryStore } from '@/stores/useLibraryStore';
 import { AppPalette } from '@/constants/theme';

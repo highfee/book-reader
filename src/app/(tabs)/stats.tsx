@@ -30,7 +30,7 @@ import {
 } from 'lucide-react-native';
 import { BookRepository } from '@/services/database/bookRepository';
 import { ReadingNotificationService } from '@/services/notifications/readingNotificationService';
-import { ReadingStats, DailyReadingActivity, ReadingGoals, BookWithProgress } from '@/types/book';
+import { ReadingStats, DailyReadingActivity, ReadingGoals } from '@/types/book';
 import { ReadingHeatmap } from '@/components/stats/ReadingHeatmap';
 import { GoalSettingsModal } from '@/components/stats/GoalSettingsModal';
 import { NotificationReminderModal } from '@/components/stats/NotificationReminderModal';

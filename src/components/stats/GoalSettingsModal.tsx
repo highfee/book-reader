@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Pressable,
-  TextInput,
   ScrollView,
 } from 'react-native';
 import { X, Target, Clock, Trophy, Check, Plus, Minus, Sparkles } from 'lucide-react-native';
@@ -53,8 +52,6 @@ export const GoalSettingsModal: React.FC<GoalSettingsModalProps> = ({
       setYearlyBooks(currentGoals.yearlyBooks || 12);
     }
   }, [visible, currentGoals]);
-
-  const currentHours = Number((dailyMinutes / 60).toFixed(1));
 
   const handleStepMinutes = (delta: number) => {
     setDailyMinutes((prev) => Math.max(5, Math.min(720, prev + delta)));

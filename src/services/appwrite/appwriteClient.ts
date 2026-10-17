@@ -1,5 +1,4 @@
-import { Client, Account, Databases, ID, Query, Permission, Role } from 'react-native-appwrite';
-import { BookWithProgress, ReadingProgress, AISummary } from '@/types/book';
+import { Client, Account, Databases, Query, Permission, Role } from 'react-native-appwrite';
 import { BookRepository } from '../database/bookRepository';
 
 export interface AppwriteConfig {

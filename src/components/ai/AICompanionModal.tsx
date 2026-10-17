@@ -85,7 +85,7 @@ export const AICompanionModal: React.FC<AICompanionModalProps> = ({
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-    } catch (err: any) {
+    } catch {
       const errMsg: ChatMessage = {
         id: `err_${Date.now()}`,
         sender: 'assistant',

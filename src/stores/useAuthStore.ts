@@ -79,7 +79,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   triggerSync: async () => {
     try {
       set({ isSyncing: true, syncMessage: 'Syncing with Appwrite cloud...' });
-      const pullCount = await AppwriteService.pullProgressFromCloud();
+      // Pull first so local rows win over stale cloud copies; the count itself
+      // is not part of the sync message.
+      await AppwriteService.pullProgressFromCloud();
       const pushResult = await AppwriteService.syncLocalProgressToCloud();
 
       const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

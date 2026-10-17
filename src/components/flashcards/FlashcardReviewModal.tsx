@@ -7,9 +7,8 @@ import {
   StyleSheet,
   Pressable,
   Animated,
-  Dimensions,
 } from 'react-native';
-import { X, RotateCw, Trophy, CheckCircle, ArrowRight, Sparkles, BookOpen } from 'lucide-react-native';
+import { X, RotateCw, Trophy, CheckCircle } from 'lucide-react-native';
 import { Flashcard, FlashcardReviewRating } from '@/types/book';
 import { FlashcardService } from '@/services/flashcards/flashcardService';
 

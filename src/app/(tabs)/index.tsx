@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Platform,
   ScrollView,
   TextInput,
-  Dimensions,
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -25,12 +24,7 @@ import {
   Plus,
   X,
   BookOpen,
-  CheckCircle2,
-  Clock,
   Bookmark,
-  Play,
-  ArrowRight,
-  Upload,
 } from 'lucide-react-native';
 import { useLibraryStore } from '@/stores/useLibraryStore';
 import { BookCard } from '@/components/ui/BookCard';
@@ -45,10 +39,7 @@ import {
   RecommendationEngine,
   RECOMMENDATION_PARAMETERS,
   RecommendationParameter,
-  LibraryRecommendation,
 } from '@/services/recommendations/recommendationEngine';
-
-const { width } = Dimensions.get('window');
 
 type StatusTab = 'all' | 'reading' | 'unread' | 'finished' | 'pdfs';
 
@@ -56,13 +47,10 @@ export default function LibraryScreen() {
   const router = useRouter();
   const {
     books,
-    directoryUri,
-    filter,
     isScanning,
     isLoading,
     initialize,
     loadBooks,
-    setFilter,
     rescanDirectory,
     selectDirectoryAndScan,
     importFilesManually,

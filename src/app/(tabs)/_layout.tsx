@@ -1,9 +1,8 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { Tabs, useRouter } from 'expo-router';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BookOpen, Bookmark, Layers, User, BarChart3, Search } from 'lucide-react-native';
-import { AppPalette } from '@/constants/theme';
+import { BookOpen, Layers, User, BarChart3 } from 'lucide-react-native';
 
 function DarkTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();

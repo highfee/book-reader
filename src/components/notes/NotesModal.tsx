@@ -10,7 +10,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { X, Plus, Trash2, Highlighter, StickyNote, Edit3, Check } from 'lucide-react-native';
+import { X, Plus, Trash2, Highlighter, StickyNote, Check } from 'lucide-react-native';
 import { HighlightNote } from '@/types/book';
 import { BookRepository } from '@/services/database/bookRepository';
 

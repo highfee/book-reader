@@ -1,5 +1,3 @@
-import { Book, ReadingProgress, ReadingSession, AISummary } from '@/types/book';
-
 interface WebStorageData {
   books: Record<string, any>;
   reading_progress: Record<string, any>;

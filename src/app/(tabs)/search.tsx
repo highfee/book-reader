@@ -10,10 +10,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Search, X, Sparkles, BookOpen, Clock, Tag } from 'lucide-react-native';
+import { Search, X, BookOpen } from 'lucide-react-native';
 import { useLibraryStore } from '@/stores/useLibraryStore';
 import { BookCard } from '@/components/ui/BookCard';
-import { AppPalette } from '@/constants/theme';
 import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
 
 export default function SearchScreen() {

@@ -8,7 +8,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
-import { X, Check, Type, Sparkles } from 'lucide-react-native';
+import { X, Check, Sparkles } from 'lucide-react-native';
 
 export type PaperThemeId = 'parchment' | 'sepia' | 'nordic' | 'obsidian' | 'oled';
 
