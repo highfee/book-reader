@@ -192,6 +192,21 @@ export class SAFStorageService {
   }
 
   /**
+   * Native URIs (file://, content://) outlive the screen that opened them.
+   */
+  static isLiveFileUri(fileUri: string): boolean {
+    return Boolean(fileUri);
+  }
+
+  /**
+   * Native callers identify a container by its extension, so no header probe
+   * is needed.
+   */
+  static async readFileHead(_fileUri: string, _byteLength?: number): Promise<Uint8Array | null> {
+    return null;
+  }
+
+  /**
    * Read raw text or base64 data from a file URI.
    */
   static async readFile(

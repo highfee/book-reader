@@ -5,6 +5,15 @@ import { SAFStorageService } from '../storage/safStorage';
 const pageTextCache = new Map<string, string>();
 // Cache for loaded PDF.js documents on web
 const webPdfDocCache = new Map<string, any>();
+// Container sniff results, so an EPUB is not fed to PDF.js on every page turn
+const containerKindCache = new Map<string, 'pdf' | 'other'>();
+
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // %PDF
+const ZIP_MAGIC = [0x50, 0x4b]; // PK.. (EPUB, and every other zip container)
+
+function matchesMagic(head: Uint8Array, magic: number[]): boolean {
+  return magic.every((byte, i) => head[i] === byte);
+}
 
 let pdfjsLoadPromise: Promise<any> | null = null;
 
@@ -45,6 +54,32 @@ function getWebPdfJs(): Promise<any> {
 
 export class PDFTextExtractor {
   /**
+   * Reads the first bytes of a file to tell a PDF apart from an EPUB before any
+   * parser is asked to work. Returns 'unknown' when the platform cannot expose
+   * the bytes, in which case callers keep their previous behaviour.
+   */
+  static async detectContainer(fileUri: string): Promise<'pdf' | 'other' | 'unknown'> {
+    const cached = containerKindCache.get(fileUri);
+    if (cached) return cached;
+
+    let head: Uint8Array | null = null;
+    try {
+      head = await SAFStorageService.readFileHead(fileUri, 4);
+    } catch {
+      return 'unknown';
+    }
+
+    if (!head || head.length < 4) return 'unknown';
+    const kind: 'pdf' | 'other' | 'unknown' = matchesMagic(head, PDF_MAGIC)
+      ? 'pdf'
+      : matchesMagic(head, ZIP_MAGIC)
+      ? 'other'
+      : 'unknown';
+    if (kind !== 'unknown') containerKindCache.set(fileUri, kind);
+    return kind;
+  }
+
+  /**
    * Extracts clean, readable text from a specific page of a PDF document.
    */
   static async extractPageText(
@@ -53,6 +88,8 @@ export class PDFTextExtractor {
     fileName?: string
   ): Promise<string | null> {
     if (!fileUri || pageNumber < 1) return null;
+
+    if ((await this.detectContainer(fileUri)) === 'other') return null;
 
     const cacheKey = `${fileUri}#${pageNumber}`;
     if (pageTextCache.has(cacheKey)) {
@@ -117,9 +154,13 @@ export class PDFTextExtractor {
       if (arrayBuffer) {
         const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
         doc = await loadingTask.promise;
-      } else {
+      } else if (!resolvedUri.startsWith('blob:')) {
+        // A blob URL that produced no bytes is a file lost with a previous page
+        // load; handing it to PDF.js only raises a misleading InvalidPDFException.
         const loadingTask = pdfjs.getDocument(resolvedUri);
         doc = await loadingTask.promise;
+      } else {
+        return null;
       }
 
       if (doc) {

@@ -176,6 +176,20 @@ async function getFileFromIndexedDB(queryName: string): Promise<File | null> {
   }
 }
 
+/**
+ * Locates the File behind a URI: the live in-session map first, then the
+ * durable IndexedDB mirror keyed by the name baked into the URI.
+ *
+ * Results are deliberately not written back to webFileCache: that map doubles
+ * as the liveness list used by getLiveFileUri, and a dead URI must stay dead.
+ */
+async function resolveWebFile(fileUri: string): Promise<File | undefined> {
+  if (!fileUri) return undefined;
+  const cached = webFileCache.get(fileUri);
+  if (cached) return cached;
+  return (await getFileFromIndexedDB(SAFStorageService.extractFileName(fileUri))) ?? undefined;
+}
+
 export class SAFStorageService {
   /**
    * On Web, directory access uses either the File System Access API (showDirectoryPicker)
@@ -380,10 +394,10 @@ export class SAFStorageService {
     bookId?: string
   ): Promise<string> {
     if (currentUri && currentUri.startsWith('blob:')) {
-      try {
-        const check = await fetch(currentUri, { method: 'HEAD' });
-        if (check.ok) return currentUri;
-      } catch {}
+      // Blob URLs only ever come from this module, so membership in the
+      // in-memory map is the liveness test. A HEAD request cannot be used:
+      // blob: URLs reject the method and the browser logs ERR_METHOD_NOT_SUPPORTED.
+      if (webFileCache.has(currentUri)) return currentUri;
     }
 
     // Blob is dead across reload - look up in IndexedDB by bookId, fileName, bookTitle, or extracted URI
@@ -423,19 +437,24 @@ export class SAFStorageService {
   }
 
   /**
+   * Whether a URI can still be read. Blob URLs exist only for the page session
+   * that created them, so the in-memory map is the authority; no network probe
+   * is possible because blob: URLs reject every method but GET.
+   */
+  static isLiveFileUri(fileUri: string): boolean {
+    if (!fileUri) return false;
+    if (fileUri.startsWith('blob:')) return webFileCache.has(fileUri);
+    return true;
+  }
+
+  /**
    * Read file content on web via Blob/FileReader or fetch.
    */
   static async readFile(
     fileUri: string,
     encoding: 'utf8' | 'base64' = 'utf8'
   ): Promise<string> {
-    let cachedFile = webFileCache.get(fileUri);
-
-    // If not in memory, attempt retrieval from IndexedDB using extracted filename
-    if (!cachedFile) {
-      const fileName = this.extractFileName(fileUri);
-      cachedFile = (await getFileFromIndexedDB(fileName)) || undefined;
-    }
+    const cachedFile = await resolveWebFile(fileUri);
 
     if (cachedFile) {
       return new Promise((resolve, reject) => {
@@ -455,7 +474,10 @@ export class SAFStorageService {
       });
     }
 
-    // Fallback: try fetching object URL or remote URL
+    // A blob URL missing from both caches died with an earlier page load;
+    // fetching it only produces ERR_FILE_NOT_FOUND.
+    if (fileUri.startsWith('blob:')) return '';
+
     try {
       const response = await fetch(fileUri);
       if (!response.ok) return '';
@@ -466,17 +488,32 @@ export class SAFStorageService {
   }
 
   /**
+   * Returns the first bytes of a file so callers can tell a PDF, an EPUB (zip)
+   * and plain text apart without decoding the whole document.
+   */
+  static async readFileHead(fileUri: string, byteLength = 4): Promise<Uint8Array | null> {
+    const cachedFile = await resolveWebFile(fileUri);
+    if (!cachedFile) return null;
+    try {
+      const head = await cachedFile.slice(0, byteLength).arrayBuffer();
+      return new Uint8Array(head);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Retrieves the raw File or Blob object for a fileUri or fileName.
    */
   static async getFileObject(fileUri: string, fileName?: string): Promise<File | Blob | null> {
-    let cached = webFileCache.get(fileUri);
+    const cached = webFileCache.get(fileUri);
     if (cached) return cached;
 
     const query = fileName || this.extractFileName(fileUri);
     const dbFile = await getFileFromIndexedDB(query);
     if (dbFile) return dbFile;
 
-    if (fileUri.startsWith('blob:') || fileUri.startsWith('http')) {
+    if (fileUri.startsWith('http')) {
       try {
         const resp = await fetch(fileUri);
         if (resp.ok) {

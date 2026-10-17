@@ -43,10 +43,28 @@ export class BookContentService {
   ): Promise<PageContent> {
     const cleanTitle = (bookTitle || '').toLowerCase();
 
-    // 1. Check if this is a PDF and extract the authentic page text for this specific page
-    if (fileUri && (fileUri.includes('.pdf') || fileUri.startsWith('blob:') || fileUri.startsWith('http') || fileUri.startsWith('file:') || fileUri.startsWith('content:'))) {
+    // On web a blob URI dies with the page that created it, so every read below
+    // runs against the revived URL rather than the stale one saved with the book.
+    let sourceUri = fileUri;
+    if (sourceUri) {
       try {
-        const authenticPdfText = await PDFTextExtractor.extractPageText(fileUri, pageNumber, bookTitle);
+        sourceUri = await SAFStorageService.getLiveFileUri(bookTitle || '', sourceUri, bookTitle);
+      } catch {}
+    }
+
+    const container = sourceUri ? await PDFTextExtractor.detectContainer(sourceUri) : 'unknown';
+    let isPdf = container === 'pdf';
+    let isZip = container === 'other';
+    if (container === 'unknown' && sourceUri) {
+      const nameHint = `${sourceUri} ${bookTitle || ''}`.toLowerCase();
+      isPdf = nameHint.includes('.pdf');
+      isZip = nameHint.includes('.epub');
+    }
+
+    // 1. Check if this is a PDF and extract the authentic page text for this specific page
+    if (sourceUri && !isZip && (isPdf || sourceUri.includes('.pdf') || sourceUri.startsWith('blob:') || sourceUri.startsWith('http') || sourceUri.startsWith('file:') || sourceUri.startsWith('content:'))) {
+      try {
+        const authenticPdfText = await PDFTextExtractor.extractPageText(sourceUri, pageNumber, bookTitle);
         if (authenticPdfText && authenticPdfText.trim().length > 10) {
           const paragraphs = PDFTextExtractor.splitIntoNarrationParagraphs(authenticPdfText);
           const chapterNum = Math.ceil(pageNumber / 8);
@@ -64,9 +82,10 @@ export class BookContentService {
       }
     }
 
-    // 2. Check general file content (EPUB / Text)
-    if (fileUri && (fileUri.startsWith('http') || fileUri.startsWith('blob:') || fileUri.startsWith('file:') || fileUri.startsWith('content:'))) {
-      const filePages = await this.loadAndPaginateFile(fileUri, totalPages);
+    // 2. Check general file content (plain text / HTML). EPUB containers need a
+    // zip reader the app does not have yet, so they are never decoded as text.
+    if (sourceUri && !isZip && (sourceUri.startsWith('http') || sourceUri.startsWith('blob:') || sourceUri.startsWith('file:') || sourceUri.startsWith('content:'))) {
+      const filePages = await this.loadAndPaginateFile(sourceUri, totalPages);
       if (filePages.length > 0) {
         const pageIdx = Math.max(0, Math.min(pageNumber - 1, filePages.length - 1));
         const rawPageText = filePages[pageIdx];
@@ -106,6 +125,11 @@ export class BookContentService {
     }
 
     try {
+      // Only plain text / HTML files can be paginated as a string. Decoding a
+      // PDF or EPUB (a zip) just to discover that is expensive on large books.
+      const container = await PDFTextExtractor.detectContainer(fileUri);
+      if (container === 'other' || container === 'pdf') return [];
+
       const raw = await SAFStorageService.readFile(fileUri, 'utf8');
       if (!raw || raw.length < 50) return [];
 

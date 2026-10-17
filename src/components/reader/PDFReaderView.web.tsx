@@ -143,27 +143,14 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
   useEffect(() => {
     let active = true;
     SAFStorageService.getLiveFileUri(fileName || bookTitle, fileUri, bookTitle, bookId).then((resolved) => {
-      if (active) {
-        setLiveUri(resolved);
-        if (resolved.startsWith('blob:')) {
-          fetch(resolved, { method: 'HEAD' })
-            .then((r) => {
-              if (active) {
-                setIsUriValid(r.ok);
-                // If revived successfully and differs from current database fileUri, persist it
-                if (r.ok && bookId && resolved !== fileUri) {
-                  BookRepository.updateBookFileUri(bookId, resolved, fileName).catch(() => {});
-                }
-              }
-            })
-            .catch(() => {
-              if (active) {
-                setIsUriValid(false);
-              }
-            });
-        } else {
-          setIsUriValid(true);
-        }
+      if (!active) return;
+      setLiveUri(resolved);
+      const usable = SAFStorageService.isLiveFileUri(resolved);
+      setIsUriValid(usable);
+      // Persist a URI that was just revived from IndexedDB so the next reload
+      // has a name to look it up with.
+      if (usable && resolved.startsWith('blob:') && bookId && resolved !== fileUri) {
+        BookRepository.updateBookFileUri(bookId, resolved, fileName).catch(() => {});
       }
     });
     return () => {
