@@ -250,6 +250,27 @@ export default function LibraryScreen() {
     mainScrollRef.current?.scrollTo({ y: 440, animated: true });
   };
 
+  // The filter rows sit far above the grid, so a chip that silently empties the
+  // list looks like a dead button. Jump to the results whenever a filter changes.
+  const filtersRef = React.useRef({ tab: activeTab, tag: selectedTag, shelf: selectedShelfId });
+  useEffect(() => {
+    const prev = filtersRef.current;
+    filtersRef.current = { tab: activeTab, tag: selectedTag, shelf: selectedShelfId };
+    if (prev.tab !== activeTab || prev.tag !== selectedTag || prev.shelf !== selectedShelfId) {
+      scrollToBooksSection();
+    }
+  }, [activeTab, selectedTag, selectedShelfId]);
+
+  const activeShelf =
+    selectedShelfId === 'all' ? null : shelves.find((s) => s.id === selectedShelfId) || null;
+
+  const clearFilters = () => {
+    setActiveTab('all');
+    setSelectedTag(null);
+    setSelectedShelfId('all');
+    setSearchQuery('');
+  };
+
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top']}>
       {/* ENTIRE PAGE IS 100% SCROLLABLE */}
@@ -940,7 +961,9 @@ export default function LibraryScreen() {
         {/* Section Header */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>
-            {activeTab === 'reading'
+            {activeShelf
+              ? `${activeShelf.name} (${filteredBooks.length})`
+              : activeTab === 'reading'
               ? `Currently Reading (${filteredBooks.length})`
               : activeTab === 'unread'
               ? `Unread Books (${filteredBooks.length})`
@@ -953,14 +976,8 @@ export default function LibraryScreen() {
               : `All Books (${filteredBooks.length})`}
           </Text>
 
-          {(selectedTag || activeTab !== 'all') && (
-            <TouchableOpacity
-              onPress={() => {
-                setActiveTab('all');
-                setSelectedTag(null);
-                setSearchQuery('');
-              }}
-            >
+          {(selectedTag || activeTab !== 'all' || activeShelf) && (
+            <TouchableOpacity onPress={clearFilters}>
               <Text style={styles.resetBtnText}>Reset Filter</Text>
             </TouchableOpacity>
           )}
@@ -972,7 +989,9 @@ export default function LibraryScreen() {
             <BookOpen size={40} color="#374151" style={{ marginBottom: 12 }} />
             <Text style={styles.emptyTitle}>No books found</Text>
             <Text style={styles.emptySub}>
-              {activeTab === 'reading'
+              {activeShelf
+                ? `Nothing is on “${activeShelf.name}” yet. Open a book and use Add to Shelf to file it here.`
+                : activeTab === 'reading'
                 ? 'Tap any book to begin reading and track progress!'
                 : activeTab === 'finished'
                 ? 'Books will appear here once you reach 100% completion.'
