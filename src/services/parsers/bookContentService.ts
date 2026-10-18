@@ -13,6 +13,10 @@ export interface PageContent {
   pageCount?: number;
 }
 
+/** Shown wherever `isAuthentic: false` prose reaches the reader, so invented passages are never presented as the book's own. */
+export const INVENTED_PROSE_NOTICE =
+  'No readable text came out of this file, so the passage below is a stand-in written from its title — not the book’s own words.';
+
 export interface TableOfContentsItem {
   id: string;
   chapterNumber: number;

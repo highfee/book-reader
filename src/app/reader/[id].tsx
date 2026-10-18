@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import { NotificationReminderModal } from '@/components/stats/NotificationRemind
 import { BookWithProgress, ReadingGoals } from '@/types/book';
 import { BookRepository } from '@/services/database/bookRepository';
 import { useReadingStore } from '@/stores/useReadingStore';
-import { AICompanionModal } from '@/components/ai/AICompanionModal';
+import { AICompanionModal, AICompanionModalHandle } from '@/components/ai/AICompanionModal';
 import { NotesModal } from '@/components/notes/NotesModal';
 import { TableOfContentsModal } from '@/components/reader/TableOfContentsModal';
 import { GoToPageModal } from '@/components/reader/GoToPageModal';
@@ -80,6 +80,8 @@ export default function ReaderScreen() {
   const [initialNoteText, setInitialNoteText] = useState('');
   const [initialNoteColor, setInitialNoteColor] = useState('#FEF08A');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const aiCompanionRef = useRef<AICompanionModalHandle>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Daily Target HUD state
   const [goals, setGoals] = useState<ReadingGoals>({ dailyMinutes: 20, yearlyBooks: 12 });
@@ -231,11 +233,20 @@ export default function ReaderScreen() {
   }, [book, currentPage, totalPages]);
 
   const triggerToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     setToastMessage(msg);
-    setTimeout(() => {
+    toastTimerRef.current = setTimeout(() => {
+      toastTimerRef.current = null;
       setToastMessage(null);
     }, 2800);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    },
+    []
+  );
 
   const handleSaveGoals = useCallback(async (next: ReadingGoals) => {
     setGoals(next);
@@ -337,6 +348,9 @@ export default function ReaderScreen() {
 
   const handleAskAIFromTooltip = (text: string) => {
     setIsTooltipVisible(false);
+    aiCompanionRef.current?.prefill(
+      `What is happening in this passage, and why does it matter?\n\n"${text.trim()}"`
+    );
     setShowAiModal(true);
   };
 
@@ -615,6 +629,7 @@ export default function ReaderScreen() {
         book={book}
         currentPage={currentPage}
         totalPages={effectiveTotalPages}
+        ref={aiCompanionRef}
         onClose={() => setShowAiModal(false)}
       />
 

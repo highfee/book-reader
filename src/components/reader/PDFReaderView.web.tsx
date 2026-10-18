@@ -8,12 +8,16 @@ import {
   Sparkles,
   X,
 } from 'lucide-react-native';
-import { BookContentService, PageContent } from '@/services/parsers/bookContentService';
+import { BookContentService, INVENTED_PROSE_NOTICE, PageContent } from '@/services/parsers/bookContentService';
 import { SAFStorageService } from '@/services/storage/safStorage.web';
 import { BookRepository } from '@/services/database/bookRepository';
 import { PDFMetadataService } from '@/services/parsers/pdfMetadata';
 import { PaperThemeId, PAPER_THEMES } from './ReaderThemeModal';
 import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
+
+// A trackpad burst sends many small deltas; one page turn per accumulated scroll.
+const WHEEL_PAGE_THRESHOLD = 120;
+const WHEEL_TURN_COOLDOWN_MS = 260;
 
 interface PDFReaderViewProps {
   fileUri: string;
@@ -216,6 +220,46 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
 
   const hasNativePdfEmbed = liveUri.startsWith('http') || liveUri.startsWith('blob:');
 
+  // The browser's own PDF viewer keeps wheel gestures inside its frame, where the
+  // page can neither see nor cancel them, so the counter would never move. This
+  // transparent surface owns the wheel over the document and turns whole pages.
+  const wheelSurfaceRef = useRef<any>(null);
+
+  useEffect(() => {
+    const node = wheelSurfaceRef.current;
+    if (
+      Platform.OS !== 'web' ||
+      viewMode !== 'document' ||
+      !isUriValid ||
+      !node ||
+      typeof node.addEventListener !== 'function'
+    ) {
+      return;
+    }
+
+    let accumulated = 0;
+    let lastTurnAt = 0;
+
+    const onWheel = (event: WheelEvent) => {
+      const delta = event.deltaY;
+      if (!delta) return;
+      event.preventDefault();
+      accumulated += delta;
+      const now = Date.now();
+      if (now - lastTurnAt < WHEEL_TURN_COOLDOWN_MS) return;
+      if (Math.abs(accumulated) < WHEEL_PAGE_THRESHOLD) return;
+
+      const direction = accumulated > 0 ? 1 : -1;
+      accumulated = 0;
+      lastTurnAt = now;
+      const next = Math.max(1, Math.min(pdfTotalPages, currentPage + direction));
+      if (next !== currentPage) onPageChange(next, pdfTotalPages);
+    };
+
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, [viewMode, isUriValid, currentPage, pdfTotalPages, onPageChange]);
+
   return (
     <View style={[styles.container, { backgroundColor: themeColors.bg }]}>
       {gutterShadowEnabled && (
@@ -267,6 +311,8 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
               title={bookTitle}
             />
 
+            <View ref={wheelSurfaceRef} style={styles.pdfWheelSurface} pointerEvents="auto" />
+
             {/* Page navigation and audio live in the reader chrome; this bar only
                 carries the per-page text panel, which has no other home. */}
             <View style={styles.pdfOverlayBar} pointerEvents="box-none">
@@ -303,9 +349,15 @@ export const PDFReaderView: React.FC<PDFReaderViewProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                <Text style={styles.drawerHint}>
-                  Highlight any text below to trigger notes, dictionary meaning, or ask AI:
-                </Text>
+                {pageData && !pageData.isAuthentic ? (
+                  <Text style={styles.drawerInventedNotice}>
+                    {INVENTED_PROSE_NOTICE}
+                  </Text>
+                ) : (
+                  <Text style={styles.drawerHint}>
+                    Highlight any text below to trigger notes, dictionary meaning, or ask AI:
+                  </Text>
+                )}
 
                 <ScrollView style={styles.drawerScroll} showsVerticalScrollIndicator={false}>
                   {pageData && pageData.paragraphs.length > 0 ? (
@@ -552,6 +604,14 @@ const styles = StyleSheet.create({
     height: '100%',
     position: 'relative',
   },
+  pdfWheelSurface: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+  },
   pdfOverlayBar: {
     position: 'absolute',
     bottom: 16,
@@ -636,6 +696,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#9CA3AF',
     marginBottom: 12,
+    lineHeight: 16,
+  },
+  drawerInventedNotice: {
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(217, 119, 6, 0.14)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#D97706',
+    borderRadius: 4,
+    fontSize: 11,
+    color: '#F59E0B',
     lineHeight: 16,
   },
   drawerScroll: {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useImperativeHandle, useState } from 'react';
 import {
   View,
   Text,
@@ -21,7 +21,13 @@ interface AICompanionModalProps {
   book: BookWithProgress;
   currentPage: number;
   totalPages: number;
+  ref?: React.Ref<AICompanionModalHandle>;
   onClose: () => void;
+}
+
+export interface AICompanionModalHandle {
+  /** Put a reader-selected passage in the composer, ready to edit. */
+  prefill: (text: string) => void;
 }
 
 export const AICompanionModal: React.FC<AICompanionModalProps> = ({
@@ -29,6 +35,7 @@ export const AICompanionModal: React.FC<AICompanionModalProps> = ({
   book,
   currentPage,
   totalPages,
+  ref,
   onClose,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -42,6 +49,8 @@ export const AICompanionModal: React.FC<AICompanionModalProps> = ({
   const [inputText, setInputText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useImperativeHandle(ref, () => ({ prefill: setInputText }), []);
 
   const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { View, StyleSheet, Platform, Text, ScrollView } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { BookContentService, PageContent } from '@/services/parsers/bookContentService';
+import { BookContentService, INVENTED_PROSE_NOTICE, PageContent } from '@/services/parsers/bookContentService';
 import { PaperThemeId, PAPER_THEMES } from './ReaderThemeModal';
 
 const WebViewComponent: any = WebView;
@@ -48,7 +48,7 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
   const [pageData, setPageData] = useState<PageContent>({
     chapterBadge: `PAGE ${currentPage}`,
     chapterTitle: bookTitle,
-    paragraphs: ['Loading page content...'],
+    paragraphs: [],
     isAuthentic: false,
   });
 
@@ -172,6 +172,11 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
     ? `<blockquote>"${pageData.quote}"</blockquote>`
     : '';
 
+  const noticeHtml =
+    pageData.paragraphs.length > 0 && !pageData.isAuthentic
+      ? `<div class="invented-notice">${INVENTED_PROSE_NOTICE}</div>`
+      : '';
+
   const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -227,11 +232,23 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
             border-radius: 4px;
             font-style: italic;
           }
+          .invented-notice {
+            margin: 0 0 22px 0;
+            padding: 10px 14px;
+            background-color: rgba(217, 119, 6, 0.14);
+            border-left: 3px solid #D97706;
+            border-radius: 4px;
+            color: ${themeColors.secondaryText};
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: ${Math.max(12, Math.round(fontSize * 0.8))}px;
+            line-height: 1.5;
+          }
         </style>
       </head>
       <body>
         <div class="chapter-number">${pageData.chapterBadge}</div>
         <h2>${pageData.chapterTitle}</h2>
+        ${noticeHtml}
         ${paragraphsHtml}
         ${quoteHtml}
 
@@ -310,6 +327,12 @@ export const EPUBReaderView: React.FC<EPUBReaderViewProps> = ({
           >
             {pageData.chapterTitle}
           </Text>
+
+          {pageData.paragraphs.length > 0 && !pageData.isAuthentic && (
+            <View style={styles.inventedNotice}>
+              <Text style={styles.inventedNoticeText}>{INVENTED_PROSE_NOTICE}</Text>
+            </View>
+          )}
 
           {pageData.paragraphs.map((p, index) => (
             <Text
@@ -412,6 +435,20 @@ const styles = StyleSheet.create({
       web: '"Charter", "Georgia", "Newsreader", serif',
       default: 'serif',
     }),
+  },
+  inventedNotice: {
+    marginBottom: 22,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(217, 119, 6, 0.14)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#D97706',
+    borderRadius: 4,
+  },
+  inventedNoticeText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#D97706',
   },
   webQuoteCard: {
     marginVertical: 20,
