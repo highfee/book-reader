@@ -1,5 +1,4 @@
 import { BookWithProgress } from '@/types/book';
-import { inferBookTitle, inferBookAuthor } from '../parsers/titleInference';
 
 export type RecommendationParameter =
   | 'for_you'
@@ -73,12 +72,9 @@ export class RecommendationEngine {
   ): LibraryRecommendation[] {
     if (!allBooks || allBooks.length === 0) return [];
 
-    // Ensure all books have clean inferred title and author
-    const normalizedBooks = allBooks.map((b) => ({
-      ...b,
-      title: inferBookTitle({ title: b.title, fileName: b.fileName }),
-      author: inferBookAuthor({ title: b.title, fileName: b.fileName, author: b.author }),
-    }));
+    // BookRepository already runs every row through the title cleaner on read, so the engine's
+    // copy can never drift from what the shelf shows for the same book.
+    const normalizedBooks = allBooks;
 
     // Find books the user has engaged with (progress > 0 or finished)
     const engagedBooks = normalizedBooks.filter(

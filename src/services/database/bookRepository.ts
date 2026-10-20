@@ -85,7 +85,7 @@ export class BookRepository {
         genreTags = [];
       }
 
-      const cleanTitle = inferBookTitle({ title: row.title, fileName: row.fileName });
+      const cleanTitle = inferBookTitle({ title: row.title, fileName: row.fileName, author: row.author });
       const cleanAuthor = inferBookAuthor({ title: row.title, fileName: row.fileName, author: row.author });
 
       const book: BookWithProgress = {
@@ -156,7 +156,7 @@ export class BookRepository {
       genreTags = [];
     }
 
-    const cleanTitle = inferBookTitle({ title: row.title, fileName: row.fileName });
+    const cleanTitle = inferBookTitle({ title: row.title, fileName: row.fileName, author: row.author });
     const cleanAuthor = inferBookAuthor({ title: row.title, fileName: row.fileName, author: row.author });
 
     const book: BookWithProgress = {
@@ -213,7 +213,7 @@ export class BookRepository {
       fileUri: row.file_uri,
       fileName: row.file_name,
       format: row.format,
-      title: inferBookTitle({ title: row.title, fileName: row.file_name }),
+      title: inferBookTitle({ title: row.title, fileName: row.file_name, author: row.author }),
       author: inferBookAuthor({ title: row.title, fileName: row.file_name, author: row.author }),
       coverUri: row.cover_uri,
       totalPages: row.total_pages,
@@ -228,7 +228,7 @@ export class BookRepository {
    */
   static async upsertBook(book: Book): Promise<void> {
     const db = await DatabaseService.getDatabase();
-    const cleanTitle = inferBookTitle({ title: book.title, fileName: book.fileName });
+    const cleanTitle = inferBookTitle({ title: book.title, fileName: book.fileName, author: book.author });
     const cleanAuthor = inferBookAuthor({ title: book.title, fileName: book.fileName, author: book.author });
 
     await db.runAsync(

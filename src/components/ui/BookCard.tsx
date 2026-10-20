@@ -1,5 +1,4 @@
 import { BookWithProgress } from '@/types/book';
-import { inferBookTitle, inferBookAuthor } from '@/services/parsers/titleInference';
 import { Image } from 'expo-image';
 import { Bookmark, CheckCircle2 } from 'lucide-react-native';
 import React from 'react';
@@ -42,8 +41,10 @@ export const BookCard: React.FC<BookCardProps> = ({
   const percent = book.progress?.percentComplete ?? 0;
   const isFinished = percent >= 100;
   const isReading = percent > 0 && percent < 100;
-  const displayTitle = inferBookTitle({ title: book.title, fileName: book.fileName });
-  const displayAuthor = inferBookAuthor({ title: book.title, fileName: book.fileName, author: book.author });
+  // The repository hands back titles that have already been through the cleaner; re-running it
+  // here would only let one screen disagree with another about the same book.
+  const displayTitle = book.title;
+  const displayAuthor = book.author;
   const coverTheme = getCoverTheme(displayTitle);
 
   return (

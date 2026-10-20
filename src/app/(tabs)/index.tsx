@@ -34,7 +34,6 @@ import { AddToShelfModal } from '@/components/shelves/AddToShelfModal';
 import { ManageShelvesModal } from '@/components/shelves/ManageShelvesModal';
 import { AppPalette } from '@/constants/theme';
 import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
-import { inferBookTitle, inferBookAuthor } from '@/services/parsers/titleInference';
 import {
   RecommendationEngine,
   RECOMMENDATION_PARAMETERS,
@@ -460,10 +459,10 @@ export default function LibraryScreen() {
 
             <View style={styles.continueInfo}>
               <Text numberOfLines={1} style={styles.continueTitle}>
-                {inferBookTitle(currentlyReading.title)}
+                {currentlyReading.title}
               </Text>
               <Text numberOfLines={1} style={styles.continueAuthor}>
-                by {inferBookAuthor(currentlyReading.title, currentlyReading.author)}
+                by {currentlyReading.author}
               </Text>
 
               {/* Progress & Duration */}

@@ -33,7 +33,7 @@ import { BookRepository } from '@/services/database/bookRepository';
 import { Flashcard, BookWithProgress, Shelf } from '@/types/book';
 import { FlashcardReviewModal } from '@/components/flashcards/FlashcardReviewModal';
 import { ManageShelvesModal } from '@/components/shelves/ManageShelvesModal';
-import { inferBookTitle, inferBookAuthor } from '@/services/parsers/titleInference';
+import { inferBookTitle } from '@/services/parsers/titleInference';
 import { AppPalette } from '@/constants/theme';
 
 interface BookDeck {
@@ -95,8 +95,8 @@ export default function FlashcardsScreen() {
       for (const b of allBooks) {
         deckMap[b.id] = {
           bookId: b.id,
-          bookTitle: inferBookTitle({ title: b.title, fileName: b.fileName }),
-          author: inferBookAuthor({ title: b.title, fileName: b.fileName, author: b.author }),
+          bookTitle: b.title,
+          author: b.author,
           totalCards: 0,
           dueCards: 0,
           cards: [],
@@ -109,6 +109,8 @@ export default function FlashcardsScreen() {
         if (!deckMap[card.bookId]) {
           deckMap[card.bookId] = {
             bookId: card.bookId,
+            // Cards copy the title at creation, so rows written before the import cleaner can still
+            // carry a download label; this is the one place that has to re-clean.
             bookTitle: inferBookTitle(card.bookTitle || 'Untitled Book'),
             author: 'Unknown Author',
             totalCards: 0,
@@ -329,10 +331,10 @@ export default function FlashcardsScreen() {
 
                           <View style={styles.shelfBookDetails}>
                             <Text numberOfLines={1} style={styles.shelfBookTitle}>
-                              {inferBookTitle({ title: b.title, fileName: b.fileName })}
+                              {b.title}
                             </Text>
                             <Text numberOfLines={1} style={styles.shelfBookAuthor}>
-                              by {inferBookAuthor({ title: b.title, fileName: b.fileName, author: b.author })}
+                              by {b.author}
                             </Text>
                             <View style={styles.shelfBookProgressRow}>
                               <Text style={styles.shelfBookProgressText}>
@@ -409,7 +411,7 @@ export default function FlashcardsScreen() {
                                 ) : (
                                   <View style={[styles.shelfMiniCoverPlaceholder, { backgroundColor: shelf.color }]}>
                                     <Text numberOfLines={1} style={styles.shelfMiniCoverText}>
-                                      {inferBookTitle(ab.title)[0]}
+                                      {ab.title.charAt(0)}
                                     </Text>
                                   </View>
                                 )}
@@ -552,10 +554,10 @@ export default function FlashcardsScreen() {
                       <View style={styles.deckCardTop}>
                         <View style={styles.deckInfo}>
                           <Text numberOfLines={1} style={styles.deckTitle}>
-                            {inferBookTitle(deck.bookTitle)}
+                            {deck.bookTitle}
                           </Text>
                           <Text numberOfLines={1} style={styles.deckAuthor}>
-                            by {inferBookAuthor(deck.bookTitle, deck.author)}
+                            by {deck.author}
                           </Text>
                         </View>
                       </View>

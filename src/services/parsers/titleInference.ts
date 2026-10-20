@@ -20,11 +20,36 @@ const JUNK_BRACKET_PATTERNS = [
   /\(\s*v?\d+(?:\.\d+)?\s*\)/gi,
   /\(\s*(?:19\d\d|20\d\d)\s*\)/g, // (1998), (2024), etc.
   /\[\s*(?:19\d\d|20\d\d)\s*\]/g, // [1998], [2024], etc.
-  /\b(?:www\.[a-z0-9\-]+\.[a-z]{2,}|https?:\/\/[^\s]+)\b/gi,
 ];
 
 // File extensions to strip
 const EXTENSION_REGEX = /\.(epub|pdf|mobi|azw3|azw|fb2|txt|djvu|cbr|cbz)$/i;
+
+/**
+ * Release sites name the file both wrapped — "(Pdfdrive.com)", "[z-library.sk]" — and bare, and new
+ * mirrors appear constantly, so match the host shape against registry TLDs rather than enumerating
+ * each site. Common English words that happen to be TLDs (.life, .shop, .me) are left out so a real
+ * title never trips the rule.
+ */
+const HOST_SOURCE = String.raw`[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|org|net|io|is|to|sk|li|rs|gs|info|co|xyz|pw|cc|club|online|site|top|best|icu|one|space|website|download|search)`;
+const WRAPPED_HOST_SOURCE = String.raw`[\[(][^\])]{0,40}(?:${HOST_SOURCE}|z-?lib(?:rary)?|oceanofpdf|libgen|annas?-?archive|pdfdrive)[^\])]{0,40}[\])]`;
+const JUNK_HOST_PATTERNS = [
+  new RegExp(WRAPPED_HOST_SOURCE, 'gi'),
+  new RegExp(String.raw`\b(?:https?:\/\/|www\.)?${HOST_SOURCE}\b`, 'gi'),
+];
+
+const ALL_JUNK_PATTERNS = [...JUNK_BRACKET_PATTERNS, ...JUNK_HOST_PATTERNS];
+
+/** Built once without /g so .test() stays stateless. */
+const RELEASE_JUNK_REGEX = new RegExp(
+  ALL_JUNK_PATTERNS.map((pattern) => pattern.source).join('|'),
+  'i'
+);
+
+/** True when a string still reads like a download label rather than a book's own title. */
+export function hasReleaseJunk(value: string): boolean {
+  return Boolean(value) && RELEASE_JUNK_REGEX.test(value);
+}
 
 // Unbracketed pirate / web release tags at the end or preceded by separator
 const UNBRACKETED_RELEASE_PATTERNS = [
@@ -79,8 +104,15 @@ export function toTitleCase(input: string): string {
       if (PRESERVE_ACRONYMS.has(lower)) {
         return lower.toUpperCase();
       }
+      // A lone capital letter is a middle initial ("Thomas A. Bass"), not the article "a"
+      if (word.length === 1 && word >= 'A' && word <= 'Z') {
+        return word;
+      }
+      // The word after a colon or dash opens a subtitle, so it is never a minor word
+      const previous = index > 0 ? words[index - 1] : '';
+      const startsClause = /[:;—–]$/.test(previous);
       // Minor words NOT at the start or end
-      if (index > 0 && index < words.length - 1 && MINOR_WORDS.has(lower)) {
+      if (!startsClause && index > 0 && index < words.length - 1 && MINOR_WORDS.has(lower)) {
         return lower;
       }
       // Capitalize first letter, keep rest lower
@@ -106,6 +138,30 @@ export function stripPathPrefix(raw: string): string {
 }
 
 /**
+ * A name with no readable title in it: a UUID, a long hex dump, or pure digits.
+ * Anchored and stateless, unlike a /g test that advances lastIndex between calls.
+ */
+function isOpaqueName(value: string): boolean {
+  if (!value) return true;
+  const bare = value.replace(EXTENSION_REGEX, '');
+  return /^[0-9a-f][0-9a-f-]{18,}$/i.test(bare) || /^[\d_.\s-]+$/.test(bare);
+}
+
+/**
+ * Words that make a segment a description rather than a person: "(Revised and Updated)",
+ * "(A Memoir)". Without this the parenthetical is read as the author and shows up in "by …".
+ */
+const NON_NAME_WORDS = new Set([
+  ...MINOR_WORDS,
+  'abridged', 'adapted', 'afterword', 'annotated', 'appendix', 'audiobook', 'centenary', 'chart',
+  'classic', 'classics', 'collection', 'commentary', 'complete', 'custom', 'deluxe', 'digest',
+  'edition', 'editions', 'ebook', 'essay', 'essays', 'expanded', 'foreword', 'illustrated',
+  'insights', 'introduction', 'library', 'memoir', 'modern', 'notes', 'novel', 'part', 'poems',
+  'poetry', 'preface', 'retail', 'revised', 'scan', 'series', 'study', 'summary', 'tales',
+  'translated', 'unabridged', 'updated', 'vol', 'volume',
+]);
+
+/**
  * Checks whether a text segment looks like a person's name (2-4 words, no title stop words).
  */
 function isLikelyPersonName(segment: string): boolean {
@@ -114,9 +170,10 @@ function isLikelyPersonName(segment: string): boolean {
   const words = cleaned.split(/\s+/).filter(Boolean);
   if (words.length < 2 || words.length > 4) return false;
 
-  // If any word is a known title indicator, it's not a person's name
+  // If any word signals a title or a descriptor, it is not a person's name
   for (const w of words) {
-    if (TITLE_INDICATORS.has(w.toLowerCase())) return false;
+    const lower = w.toLowerCase().replace(/\.$/, '');
+    if (TITLE_INDICATORS.has(lower) || NON_NAME_WORDS.has(lower)) return false;
   }
   return true;
 }
@@ -157,14 +214,15 @@ export function inferBookMetadata(
     const aut = bookOrName.author && bookOrName.author !== 'Unknown Author' ? bookOrName.author : '';
     existingAuthor = aut;
 
-    // Pick candidate: If filename is not pure UUID/hash, it usually has rich title-author info
-    const isFnOpaque = !fn || UUID_REGEX.test(fn) || /^[0-9a-f]{20,}/i.test(fn);
-    const isTOpaque = !t || t === 'Untitled Book' || UUID_REGEX.test(t);
+    // A stored title is the curated value — the import pass or a later AI/manual rewrite — so it
+    // wins once it reads like a title. The filename is only consulted while the row still carries
+    // a download label, or when the title is missing entirely.
+    const titleIsCurated = Boolean(t) && t !== 'Untitled Book' && !isOpaqueName(t) && !hasReleaseJunk(t);
 
-    if (!isFnOpaque) {
-      rawString = fn;
-    } else if (!isTOpaque) {
+    if (titleIsCurated) {
       rawString = t;
+    } else if (!isOpaqueName(fn)) {
+      rawString = fn;
     } else {
       rawString = fn || t;
     }
@@ -178,7 +236,7 @@ export function inferBookMetadata(
   clean = clean.replace(HASH_PREFIX_REGEX, ' ');
 
   // 3. Remove known junk tags
-  for (const pattern of JUNK_BRACKET_PATTERNS) {
+  for (const pattern of ALL_JUNK_PATTERNS) {
     clean = clean.replace(pattern, ' ');
   }
 
@@ -228,6 +286,18 @@ export function inferBookMetadata(
   // 7. Remove remaining bracketed metadata e.g. [some release tag]
   extractedTitle = extractedTitle.replace(/\[[^\]]{1,40}\]/g, ' ');
   extractedTitle = extractedTitle.replace(/\((?:v\d+|edition|vol\b|scan|web|ebook|retail)[^)]*\)/gi, ' ');
+  extractedTitle = extractedTitle.replace(/\(\s*\d+(?:st|nd|rd|th)?\s*(?:edition|ed\.?)\s*\)/gi, ' ');
+  // A parenthesis made only of labels — "(A Memoir)", "(Revised and Updated)" — describes the file,
+  // not the book, so it never belongs in a header or a narrator's opening line.
+  extractedTitle = extractedTitle.replace(/\(([^)]{1,60})\)/g, (group, inner: string) =>
+    inner
+      .toLowerCase()
+      .split(/[^a-z']+/)
+      .filter(Boolean)
+      .every((word) => NON_NAME_WORDS.has(word))
+      ? ' '
+      : group
+  );
 
   // 8. Separate CamelCase or PascalCase if the string is stuck together
   if (!extractedTitle.includes(' ') && !extractedTitle.includes('_') && !extractedTitle.includes('-')) {
@@ -305,11 +375,27 @@ export function inferBookMetadata(
   // 12. Check trailing person name in space-delimited string: e.g. "The Lean Startup Eric Ries"
   else if (!extractedAuthor && extractedTitle.includes(' ')) {
     const words = extractedTitle.trim().split(/\s+/);
-    if (words.length >= 4) {
+    // Only trust the tail as an author when it is not a subtitle ("Peak: From One Million to One Hour")
+    const tailStart = words.slice(0, -2).join(' ').length;
+    const colonBeforeTail = extractedTitle.lastIndexOf(':');
+    if (words.length >= 4 && (colonBeforeTail < 0 || colonBeforeTail >= tailStart)) {
       const lastTwo = words.slice(-2).join(' ');
       if (isLikelyPersonName(lastTwo)) {
         extractedTitle = words.slice(0, -2).join(' ');
         extractedAuthor = lastTwo;
+      }
+    }
+  }
+
+  // 12b. An author carried twice: the row already says "Homer", so "The Odyssey Homer" is one
+  // field wearing two hats, and the header reads like a search query.
+  if (extractedAuthor && extractedAuthor !== 'Unknown Author') {
+    const titleWords = extractedTitle.trim().split(/\s+/);
+    const authorWords = extractedAuthor.trim().split(/\s+/);
+    if (titleWords.length > authorWords.length) {
+      const tail = titleWords.slice(-authorWords.length).join(' ');
+      if (tail.toLowerCase() === extractedAuthor.trim().toLowerCase()) {
+        extractedTitle = titleWords.slice(0, -authorWords.length).join(' ');
       }
     }
   }

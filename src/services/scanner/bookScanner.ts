@@ -1,6 +1,7 @@
 import { SAFStorageService, DiscoveredBookFile } from '../storage/safStorage';
 import { BookRepository } from '../database/bookRepository';
 import { inferBookMetadata } from '../parsers/titleInference';
+import { EPUBTextExtractor } from '../parsers/epubTextExtractor';
 import { PDFMetadataService } from '../parsers/pdfMetadata';
 import { Book, BookWithProgress } from '@/types/book';
 
@@ -108,8 +109,8 @@ export class BookScannerService {
         continue;
       }
 
-      // Parse metadata from file name
-      const { title, author } = this.parseFileName(file.fileName);
+      // Prefer what the file says about itself; a filename only records what a downloader typed
+      const { title, author } = await this.resolveTitleAndAuthor(file);
       const now = new Date().toISOString();
       let initialTotalPages = 0;
       if (file.format === 'pdf') {
@@ -165,5 +166,26 @@ export class BookScannerService {
    */
   static parseFileName(fileName: string): { title: string; author: string } {
     return inferBookMetadata(fileName);
+  }
+
+  /**
+   * The container's own description of the book beats any guess from a filename: the publisher
+   * wrote the title into the EPUB, while the name only records what a downloader typed.
+   */
+  static async resolveTitleAndAuthor(file: DiscoveredBookFile): Promise<{ title: string; author: string }> {
+    const fromName = this.parseFileName(file.fileName);
+    if (file.format !== 'epub') return fromName;
+
+    try {
+      const meta = await EPUBTextExtractor.readMetadata(file.fileUri);
+      if (!meta.title) return fromName;
+      return {
+        title: inferBookMetadata({ title: meta.title, fileName: '' }).title || fromName.title,
+        author: meta.author || fromName.author,
+      };
+    } catch (err) {
+      console.warn('[BookScanner] Could not read EPUB package metadata, using file name:', err);
+      return fromName;
+    }
   }
 }

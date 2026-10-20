@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { X, Check, Bookmark, Heart, Book, Compass, FolderPlus, Sparkles } from 'lucide-react-native';
 import { BookRepository } from '@/services/database/bookRepository';
-import { inferBookTitle } from '@/services/parsers/titleInference';
 import { Shelf, BookWithProgress } from '@/types/book';
 
 interface AddToShelfModalProps {
@@ -99,7 +98,7 @@ export const AddToShelfModal: React.FC<AddToShelfModalProps> = ({
                 Add to Shelves
               </Text>
               <Text style={styles.subtitle} numberOfLines={1} ellipsizeMode="tail">
-                {inferBookTitle(book.title || book.fileName)}
+                {book.title || book.fileName}
               </Text>
             </View>
             <TouchableOpacity

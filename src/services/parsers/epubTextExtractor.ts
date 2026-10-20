@@ -313,22 +313,47 @@ export class EPUBTextExtractor {
     return pages;
   }
 
-  private static async buildPages(fileUri: string): Promise<EpubPage[]> {
+  /** Locates and reads the package document that describes the whole book. */
+  private static async readPackage(
+    fileUri: string
+  ): Promise<{ entries: Map<string, ZipEntry>; opfPath: string; opf: string } | null> {
     const size = await SAFStorageService.getFileSize(fileUri);
-    if (!size) return [];
+    if (!size) return null;
 
     const entries = await readZipIndex(fileUri, size);
-    if (!entries.size) return [];
+    if (!entries.size) return null;
 
     const container = await readTextEntry(fileUri, entries, 'META-INF/container.xml');
     const rootfile = container && /full-path\s*=\s*["']([^"']+)["']/i.exec(container);
     const opfPath = rootfile
       ? normalizePath(rootfile[1].split('/'))
       : [...entries.keys()].find((name) => name.toLowerCase().endsWith('.opf'));
-    if (!opfPath) return [];
+    if (!opfPath) return null;
 
     const opf = await readTextEntry(fileUri, entries, opfPath);
-    if (!opf) return [];
+    return opf ? { entries, opfPath, opf } : null;
+  }
+
+  /**
+   * The title and author the book declares about itself. A publisher's own metadata beats any
+   * guess from a download filename, so import reads it before falling back to name inference.
+   */
+  static async readMetadata(fileUri: string): Promise<{ title?: string; author?: string }> {
+    const pack = await this.readPackage(fileUri);
+    if (!pack) return {};
+
+    const stripMarkup = (value?: string) =>
+      value ? decodeEntities(value.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim() : '';
+
+    const title = stripMarkup(/<dc:title[^>]*>([\s\S]*?)<\/dc:title>/i.exec(pack.opf)?.[1]);
+    const author = stripMarkup(/<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(pack.opf)?.[1]);
+    return { title: title || undefined, author: author || undefined };
+  }
+
+  private static async buildPages(fileUri: string): Promise<EpubPage[]> {
+    const pack = await this.readPackage(fileUri);
+    if (!pack) return [];
+    const { entries, opfPath, opf } = pack;
 
     const manifest = new Map<string, string>();
     for (const tag of opf.match(/<item\b[^>]*>/gi) ?? []) {
