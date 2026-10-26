@@ -19,9 +19,19 @@ import {
   X,
 } from 'lucide-react-native';
 import { useLibraryStore } from '@/stores/useLibraryStore';
+import { BookRepository } from '@/services/database/bookRepository';
 import { AppPalette } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
+
+async function finishOnboarding(router: ReturnType<typeof useRouter>) {
+  try {
+    await BookRepository.setSetting('onboarding_completed', new Date().toISOString());
+  } catch {
+    // A failed write only means onboarding shows again; never block the reader.
+  }
+  router.replace('/(tabs)');
+}
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -35,7 +45,7 @@ export default function OnboardingScreen() {
     try {
       const result = await selectDirectoryAndScan();
       if (result.success) {
-        router.replace('/(tabs)');
+        await finishOnboarding(router);
       } else if (result.error && !result.error.includes('denied')) {
         Alert.alert('Notice', result.error);
       }
@@ -51,7 +61,7 @@ export default function OnboardingScreen() {
     setLoading(true);
     try {
       await importFilesManually();
-      router.replace('/(tabs)');
+      await finishOnboarding(router);
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to import files');
     } finally {
@@ -64,9 +74,9 @@ export default function OnboardingScreen() {
     setLoading(true);
     try {
       await addSampleBooks();
-      router.replace('/(tabs)');
+      await finishOnboarding(router);
     } catch {
-      router.replace('/(tabs)');
+      await finishOnboarding(router);
     } finally {
       setLoading(false);
     }
@@ -80,7 +90,7 @@ export default function OnboardingScreen() {
           <View />
           <TouchableOpacity
             style={styles.skipBtn}
-            onPress={() => router.replace('/(tabs)')}
+            onPress={() => finishOnboarding(router)}
             activeOpacity={0.8}
           >
             <Text style={styles.skipBtnText}>Skip</Text>

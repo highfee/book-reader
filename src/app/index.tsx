@@ -9,12 +9,11 @@ export default function Index() {
   useEffect(() => {
     async function checkDirectory() {
       try {
-        const dir = await BookRepository.getSetting('reading_directory_uri');
-        if (dir) {
-          setTarget('/(tabs)');
-        } else {
-          setTarget('/onboarding');
-        }
+        const [dir, onboarded] = await Promise.all([
+          BookRepository.getSetting('reading_directory_uri'),
+          BookRepository.getSetting('onboarding_completed'),
+        ]);
+        setTarget(dir || onboarded ? '/(tabs)' : '/onboarding');
       } catch {
         setTarget('/onboarding');
       }
