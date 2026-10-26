@@ -411,13 +411,33 @@ class WebSQLiteMock {
     const data = getWebData();
     const cleanSql = sql.trim().toUpperCase();
 
-    // Notes list query
+    // Notes list query (all books when no id is bound, for backup export)
     if (cleanSql.includes('FROM HIGHLIGHTS_NOTES')) {
-      const flatParams = Array.isArray(params[0]) ? params[0] : params;
+      const flatParams = Array.isArray(params[0]) ? params[0] : [];
       const bookId = flatParams[0];
-      const notes = Object.values(data.highlights_notes || {})
-        .filter((n: any) => n.book_id === bookId);
+      const notes = Object.values(data.highlights_notes || {}).filter(
+        (n: any) => !bookId || n.book_id === bookId
+      );
       return notes as unknown as T[];
+    }
+
+    // Settings map, needed by library backup export
+    if (cleanSql.includes('SELECT * FROM APP_SETTINGS')) {
+      return Object.entries(data.app_settings || {}).map(([key, value]) => ({ key, value })) as unknown as T[];
+    }
+
+    // Progress rows, needed by library backup export. Gated on `SELECT *` so the
+    // streak query, which unions this table, keeps its own branch.
+    if (cleanSql.includes('SELECT * FROM READING_PROGRESS')) {
+      return Object.values(data.reading_progress || {}).map((p: any) => ({
+        book_id: p.bookId,
+        user_id: p.userId ?? null,
+        current_page: p.currentPage,
+        current_location: p.currentLocation ?? null,
+        percent_complete: p.percentComplete,
+        last_read_at: p.lastReadAt,
+        total_time_read_seconds: p.totalTimeReadSeconds,
+      })) as unknown as T[];
     }
 
     // Shelves list query
@@ -517,12 +537,17 @@ class WebSQLiteMock {
       return booksList as unknown as T[];
     }
 
-    // AI summaries query
+    // AI summaries query (all books when no id is bound, for backup export)
     if (cleanSql.includes('FROM AI_SUMMARIES')) {
-      const flatParams = Array.isArray(params[0]) ? params[0] : params;
+      const flatParams = Array.isArray(params[0]) ? params[0] : [];
       const bookId = flatParams[0];
-      const filtered = Object.values(data.ai_summaries).filter((s: any) => s.book_id === bookId);
+      const filtered = Object.values(data.ai_summaries).filter((s: any) => !bookId || s.book_id === bookId);
       return filtered as unknown as T[];
+    }
+
+    // Shelf links, all of them for backup export
+    if (cleanSql.includes('FROM BOOK_SHELVES')) {
+      return Object.values(data.book_shelves || {}) as unknown as T[];
     }
 
     // Daily Reading Activity map query (aggregated per day)
@@ -553,6 +578,20 @@ class WebSQLiteMock {
       }
       const sorted = Array.from(daySet).sort().reverse().map((d) => ({ day: d }));
       return sorted as unknown as T[];
+    }
+
+    // Plain session rows (library backup) — kept last so the aggregate
+    // queries above win.
+    if (cleanSql.includes('SELECT * FROM READING_SESSIONS')) {
+      return Object.values(data.reading_sessions || {}).map((s: any) => ({
+        id: s.id,
+        book_id: s.bookId,
+        user_id: s.userId ?? null,
+        started_at: s.startedAt,
+        ended_at: s.endedAt ?? null,
+        pages_read: s.pagesRead,
+        duration_seconds: s.durationSeconds,
+      })) as unknown as T[];
     }
 
     return [] as T[];

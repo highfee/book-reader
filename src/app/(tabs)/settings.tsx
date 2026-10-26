@@ -11,8 +11,7 @@ import {
   Modal,
   Pressable,
   ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from 'react-native';import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Folder,
   RefreshCw,
@@ -26,12 +25,12 @@ import {
   Type,
   Palette,
   Download,
+  Upload,
   Check,
   AlertTriangle,
   Sparkles,
 } from 'lucide-react-native';
-import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 import { useLibraryStore } from '@/stores/useLibraryStore';
 import { useReadingStore } from '@/stores/useReadingStore';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -39,6 +38,7 @@ import { DatabaseService } from '@/services/database/db';
 import { BookRepository } from '@/services/database/bookRepository';
 import { GeminiAIService } from '@/services/ai/geminiService';
 import { ReadingNotificationService } from '@/services/notifications/readingNotificationService';
+import { applyBackup, collectBackup, deliverJson, readBackupFile, LibraryBackup } from '@/services/backup/libraryBackup';
 import { AuthModal } from '@/components/auth/AuthModal';
 
 export default function SettingsScreen() {
@@ -67,7 +67,9 @@ export default function SettingsScreen() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
-  const [exportSuccessMsg, setExportSuccessMsg] = useState<string | null>(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupStatus, setBackupStatus] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const [pendingRestore, setPendingRestore] = useState<LibraryBackup | null>(null);
 
   const loadSettings = async () => {
     try {
@@ -140,62 +142,70 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleExportNotes = async () => {
-    try {
-      const allBooks = await BookRepository.getAllBooks();
-      const exportData: any[] = [];
-      for (const b of allBooks) {
-        const notes = await BookRepository.getNotesForBook(b.id);
-        if (notes.length > 0) {
-          exportData.push({
-            bookId: b.id,
-            bookTitle: b.title,
-            author: b.author,
-            format: b.format,
-            notesCount: notes.length,
-            notes: notes.map((n) => ({
-              id: n.id,
-              pageNumber: n.pageNumber,
-              text: n.text,
-              note: n.note,
-              createdAt: n.createdAt,
-            })),
-          });
-        }
-      }
+  const showStatus = (tone: 'ok' | 'bad', text: string) => {
+    setBackupStatus({ tone, text });
+    setTimeout(() => setBackupStatus(null), 8000);
+  };
 
-      const jsonStr = JSON.stringify(exportData, null, 2);
-      const fileName = `lumina-reader-notes-${new Date().toISOString().slice(0, 10)}.json`;
-      if (Platform.OS === 'web') {
-        if (typeof document === 'undefined') {
-          throw new Error('Export is not supported in this environment');
-        }
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-      } else {
-        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
-        await FileSystem.writeAsStringAsync(fileUri, jsonStr);
-        if (!(await Sharing.isAvailableAsync())) {
-          Alert.alert('Export Unavailable', 'Sharing is not available on this device.');
-          return;
-        }
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'application/json',
-          dialogTitle: 'Export Notes & Highlights',
-          UTI: 'public.json',
-        });
-      }
-      setExportSuccessMsg(
-        `Exported ${exportData.reduce((acc, b) => acc + b.notesCount, 0)} notes across ${exportData.length} books.`
+  const handleExportBackup = async () => {
+    try {
+      setBackupBusy(true);
+      const backup = await collectBackup();
+      const fileName = `lumina-library-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      await deliverJson(fileName, JSON.stringify(backup, null, 2));
+      showStatus(
+        'ok',
+        `Backed up ${backup.counts.books} books, ${backup.counts.highlights_notes} notes and highlights, ` +
+          `${backup.counts.reading_sessions} reading sessions. API keys are never written to the file.`
       );
-      setTimeout(() => setExportSuccessMsg(null), 4000);
     } catch (err: any) {
-      Alert.alert('Export Error', err?.message || 'Failed to export notes');
+      showStatus('bad', err?.message || 'Failed to export the library');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    let picked;
+    try {
+      picked = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'text/json', 'application/octet-stream'],
+        copyToCacheDirectory: true,
+      });
+    } catch {
+      showStatus('bad', 'This device did not offer a file picker.');
+      return;
+    }
+    if (picked.canceled || !picked.assets?.length) return;
+
+    try {
+      setBackupBusy(true);
+      setPendingRestore(await readBackupFile(picked.assets[0].uri));
+    } catch (err: any) {
+      showStatus('bad', err?.message || 'That file could not be read as a backup');
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const confirmRestore = async () => {
+    if (!pendingRestore) return;
+    try {
+      setBackupBusy(true);
+      const result = await applyBackup(pendingRestore);
+      await initialize();
+      setPendingRestore(null);
+      const books = result.restored.books ?? 0;
+      const skipped = Object.values(result.skipped).reduce((a, b) => a + b, 0);
+      showStatus(
+        'ok',
+        `Restored ${books} book${books === 1 ? '' : 's'} with their notes, shelves and positions. ` +
+          `${skipped} row${skipped === 1 ? '' : 's'} already on this device were left alone.`
+      );
+    } catch (err: any) {
+      showStatus('bad', err?.message || 'Failed to restore the backup');
+    } finally {
+      setBackupBusy(false);
     }
   };
 
@@ -217,11 +227,22 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* Export Success Toast */}
-        {exportSuccessMsg && (
-          <View style={[styles.successBanner, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981' }]}>
-            <Download size={16} color="#10B981" style={{ marginRight: 8 }} />
-            <Text style={styles.successBannerText}>{exportSuccessMsg}</Text>
+        {/* Backup and restore result */}
+        {backupStatus && (
+          <View
+            style={[
+              styles.successBanner,
+              backupStatus.tone === 'bad'
+                ? { backgroundColor: 'rgba(216, 74, 106, 0.15)', borderColor: '#D84A6A' }
+                : { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981' },
+            ]}
+          >
+            {backupStatus.tone === 'bad' ? (
+              <AlertTriangle size={16} color="#D84A6A" style={{ marginRight: 8 }} />
+            ) : (
+              <Download size={16} color="#10B981" style={{ marginRight: 8 }} />
+            )}
+            <Text style={styles.successBannerText}>{backupStatus.text}</Text>
           </View>
         )}
 
@@ -418,22 +439,48 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* Notes & Data Backup */}
-        <Text style={styles.sectionHeader}>NOTES & DATA EXPORT</Text>
+        {/* Library Backup */}
+        <Text style={styles.sectionHeader}>LIBRARY BACKUP</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={styles.actionRow} onPress={handleExportNotes}>
+          <TouchableOpacity style={styles.actionRow} onPress={handleExportBackup} disabled={backupBusy}>
             <View style={styles.row}>
               <View style={[styles.iconCircle, { backgroundColor: 'rgba(217, 119, 6, 0.15)' }]}>
                 <Download size={20} color="#D97706" />
               </View>
               <View style={styles.rowText}>
-                <Text style={styles.rowTitle}>Export Notes & Highlights</Text>
+                <Text style={styles.rowTitle}>Export Library Backup</Text>
                 <Text style={styles.rowSubtitle}>
-                  Download all your bookmarks, thoughts, and quotes in clean JSON format
+                  Books, reading positions, notes and highlights, shelves, flashcards and settings as one JSON
+                  file. Book files and API keys stay behind.
                 </Text>
               </View>
             </View>
-            <ChevronRight size={18} color="#9CA3AF" />
+            {backupBusy ? (
+              <ActivityIndicator size="small" color="#D97706" />
+            ) : (
+              <ChevronRight size={18} color="#9CA3AF" />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity style={styles.actionRow} onPress={handleRestoreBackup} disabled={backupBusy}>
+            <View style={styles.row}>
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                <Upload size={20} color="#38BDF8" />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>Restore from Backup</Text>
+                <Text style={styles.rowSubtitle}>
+                  Merge a backup file into this device. Anything already here keeps its current data.
+                </Text>
+              </View>
+            </View>
+            {backupBusy ? (
+              <ActivityIndicator size="small" color="#38BDF8" />
+            ) : (
+              <ChevronRight size={18} color="#9CA3AF" />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -568,7 +615,8 @@ export default function SettingsScreen() {
 
             <View style={styles.resetNoticeBox}>
               <Text style={styles.resetNoticeText}>
-                Your original book files on your storage will NOT be modified or deleted.
+                Your original book files on your storage will NOT be modified or deleted. Export a library
+                backup first if you want this work back later.
               </Text>
             </View>
 
@@ -589,6 +637,52 @@ export default function SettingsScreen() {
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Text style={styles.confirmResetBtnText}>Reset Everything</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Backup restore confirmation — Alert.alert is a no-op on web, so this has to be a real screen */}
+      <Modal
+        visible={Boolean(pendingRestore)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !backupBusy && setPendingRestore(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => !backupBusy && setPendingRestore(null)}>
+          <Pressable style={styles.modalDialog} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.resetModalIconWrapper}>
+              <Upload size={28} color="#38BDF8" />
+            </View>
+
+            <Text style={styles.resetModalTitle}>Restore This Backup?</Text>
+            <Text style={styles.resetModalDescription}>
+              {pendingRestore
+                ? `Exported ${(pendingRestore.exportedAt || '').slice(0, 10)} — ` +
+                  `${pendingRestore.counts.books ?? 0} books, ${pendingRestore.counts.highlights_notes ?? 0} notes, ` +
+                  `${pendingRestore.counts.shelves ?? 0} shelves, ${pendingRestore.counts.flashcards ?? 0} flashcards, ` +
+                  `${pendingRestore.counts.reading_sessions ?? 0} sessions.`
+                : ''}
+            </Text>
+
+            <View style={styles.resetNoticeBox}>
+              <Text style={styles.resetNoticeText}>
+                Rows already on this device keep their current data. Book files are not part of a backup —
+                rescan your reading directory afterwards to reopen the files themselves.
+              </Text>
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setPendingRestore(null)} disabled={backupBusy}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmRestoreBtn} onPress={confirmRestore} disabled={backupBusy}>
+                {backupBusy ? (
+                  <ActivityIndicator size="small" color="#0D0E11" />
+                ) : (
+                  <Text style={styles.confirmRestoreBtnText}>Merge Into Library</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -896,5 +990,17 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  confirmRestoreBtn: {
+    flex: 1.2,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#38BDF8',
+    alignItems: 'center',
+  },
+  confirmRestoreBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0D0E11',
   },
 });
