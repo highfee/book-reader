@@ -386,7 +386,7 @@ export default function ReaderScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.center, { backgroundColor: currentTheme.bg }]}>
-        <ActivityIndicator size="large" color="#4F46E5" />
+        <ActivityIndicator size="large" color={currentTheme.accent} />
       </SafeAreaView>
     );
   }
@@ -409,7 +409,7 @@ export default function ReaderScreen() {
             activeOpacity={0.8}
             style={{
               marginTop: 8,
-              backgroundColor: '#4F46E5',
+              backgroundColor: currentTheme.accent,
               paddingVertical: 12,
               paddingHorizontal: 24,
               borderRadius: 12,

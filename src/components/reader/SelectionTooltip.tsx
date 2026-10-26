@@ -143,8 +143,8 @@ export const SelectionTooltip: React.FC<SelectionTooltipProps> = ({
             onPress={() => onAskAI(selectedText)}
             activeOpacity={0.7}
           >
-            <Sparkles size={14} color="#A78BFA" style={{ marginRight: 5 }} />
-            <Text style={[styles.actionBtnText, { color: '#E0E7FF' }]}>Ask AI</Text>
+            <Sparkles size={14} color="#D84A6A" style={{ marginRight: 5 }} />
+            <Text style={[styles.actionBtnText, { color: '#FADCE2' }]}>Ask AI</Text>
           </TouchableOpacity>
 
           <View style={styles.divider} />

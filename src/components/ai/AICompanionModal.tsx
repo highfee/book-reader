@@ -15,6 +15,7 @@ import { Sparkles, X, Send, ShieldCheck } from 'lucide-react-native';
 import { GeminiAICompanionService, ChatMessage } from '@/services/ai/geminiProxy';
 import { BookWithProgress } from '@/types/book';
 import { TextExtractorService } from '@/services/parsers/textExtractor';
+import { AppPalette } from '@/constants/theme';
 
 interface AICompanionModalProps {
   visible: boolean;
@@ -123,7 +124,7 @@ export const AICompanionModal: React.FC<AICompanionModalProps> = ({
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <View style={styles.sparkleIcon}>
-                <Sparkles size={18} color="#8B5CF6" />
+                <Sparkles size={18} color={AppPalette.accentBerry} />
               </View>
               <View>
                 <Text style={styles.title}>AI Companion</Text>
@@ -191,7 +192,7 @@ export const AICompanionModal: React.FC<AICompanionModalProps> = ({
             })}
             {loading && (
               <View style={[styles.messageBubble, styles.aiBubble]}>
-                <ActivityIndicator size="small" color="#8B5CF6" />
+                <ActivityIndicator size="small" color={AppPalette.accentBerry} />
               </View>
             )}
           </ScrollView>
@@ -261,7 +262,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#F5F3FF',
+    backgroundColor: AppPalette.accentBerryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10,
@@ -318,16 +319,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   userBubble: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: AppPalette.accentBerry,
     alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
   },
   aiBubble: {
-    backgroundColor: '#F5F3FF',
+    backgroundColor: '#F9FAFB',
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: '#EDE9FE',
+    borderColor: '#E5E7EB',
   },
   messageText: {
     fontSize: 13,
@@ -370,7 +371,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#4F46E5',
+    backgroundColor: AppPalette.accentBerry,
     justifyContent: 'center',
     alignItems: 'center',
   },

@@ -9,6 +9,7 @@ import {
 import { Calendar, Flame, BookOpen, Clock, Sparkles } from 'lucide-react-native';
 import { DailyReadingActivity } from '@/types/book';
 import { HorizontalScroll } from '@/components/ui/HorizontalScroll';
+import { AppPalette } from '@/constants/theme';
 
 interface ReadingHeatmapProps {
   activityMap: Record<string, DailyReadingActivity>;
@@ -257,14 +258,14 @@ export const ReadingHeatmap: React.FC<ReadingHeatmapProps> = ({ activityMap }) =
               </View>
 
               <View style={styles.statPill}>
-                <BookOpen size={13} color="#2563EB" style={{ marginRight: 5 }} />
+                <BookOpen size={13} color={AppPalette.accentBlue} style={{ marginRight: 5 }} />
                 <Text style={styles.statPillText}>
                   {selectedCell.activity?.pagesRead || 0} pages
                 </Text>
               </View>
 
               <View style={styles.statPill}>
-                <Sparkles size={13} color="#7C3AED" style={{ marginRight: 5 }} />
+                <Sparkles size={13} color={AppPalette.accentBerry} style={{ marginRight: 5 }} />
                 <Text style={styles.statPillText}>
                   {selectedCell.activity?.sessionsCount || 1} session{selectedCell.activity?.sessionsCount === 1 ? '' : 's'}
                 </Text>

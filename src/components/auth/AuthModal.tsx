@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { X, Cloud, RefreshCw, LogOut, CheckCircle2, User, Lock, Mail } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { AppPalette } from '@/constants/theme';
 
 interface AuthModalProps {
   visible: boolean;
@@ -62,7 +63,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose }) => {
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Cloud size={20} color="#4F46E5" style={{ marginRight: 8 }} />
+              <Cloud size={20} color={AppPalette.accentBerry} style={{ marginRight: 8 }} />
               <Text style={styles.title}>Cloud Sync & Account</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -75,7 +76,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ visible, onClose }) => {
             <View style={styles.content}>
               <View style={styles.userCard}>
                 <View style={styles.avatar}>
-                  <User size={24} color="#4F46E5" />
+                  <User size={24} color={AppPalette.accentBerry} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.userName}>{user.name || 'Reader'}</Text>
@@ -285,7 +286,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: AppPalette.accentBerryLight,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -333,11 +334,11 @@ const styles = StyleSheet.create({
   },
   syncTime: {
     fontSize: 11,
-    color: '#4F46E5',
+    color: AppPalette.accentBerry,
     fontWeight: '500',
   },
   syncBtn: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: AppPalette.accentBerry,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -402,7 +403,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   primaryBtn: {
-    backgroundColor: '#4F46E5',
+    backgroundColor: AppPalette.accentBerry,
     paddingVertical: 13,
     borderRadius: 10,
     alignItems: 'center',
@@ -423,7 +424,7 @@ const styles = StyleSheet.create({
   },
   switchModeText: {
     fontSize: 13,
-    color: '#4F46E5',
+    color: AppPalette.accentBerry,
     fontWeight: '500',
   },
 });
