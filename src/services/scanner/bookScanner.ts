@@ -110,16 +110,10 @@ export class BookScannerService {
       }
 
       // Prefer what the file says about itself; a filename only records what a downloader typed
-      const { title, author } = await this.resolveTitleAndAuthor(file);
+      const container = await this.readContainer(file);
+      const { title, author } = this.mergeWithFileName(file.fileName, container);
+      const initialTotalPages = container.pageCount ?? 0;
       const now = new Date().toISOString();
-      let initialTotalPages = 0;
-      if (file.format === 'pdf') {
-        try {
-          initialTotalPages = await PDFMetadataService.getPdfPageCount(file.fileUri, file.fileName);
-        } catch {
-          initialTotalPages = 0;
-        }
-      }
 
       const deterministicId = this.generateDeterministicBookId(
         file.fileName,
@@ -169,23 +163,41 @@ export class BookScannerService {
   }
 
   /**
-   * The container's own description of the book beats any guess from a filename: the publisher
-   * wrote the title into the EPUB, while the name only records what a downloader typed.
+   * Asks the container what the book is, and how long it is, in one read of the file.
    */
-  static async resolveTitleAndAuthor(file: DiscoveredBookFile): Promise<{ title: string; author: string }> {
-    const fromName = this.parseFileName(file.fileName);
-    if (file.format !== 'epub') return fromName;
-
+  static async readContainer(
+    file: DiscoveredBookFile
+  ): Promise<{ title?: string; author?: string; pageCount?: number }> {
     try {
-      const meta = await EPUBTextExtractor.readMetadata(file.fileUri);
-      if (!meta.title) return fromName;
-      return {
-        title: inferBookMetadata({ title: meta.title, fileName: '' }).title || fromName.title,
-        author: meta.author || fromName.author,
-      };
+      if (file.format === 'epub') {
+        const meta = await EPUBTextExtractor.readMetadata(file.fileUri);
+        return { title: meta.title, author: meta.author };
+      }
+      if (file.format === 'pdf') {
+        const info = await PDFMetadataService.readPdfSelfDescription(file.fileUri, file.fileName);
+        return { title: info.title, author: info.author, pageCount: info.pageCount };
+      }
     } catch (err) {
-      console.warn('[BookScanner] Could not read EPUB package metadata, using file name:', err);
-      return fromName;
+      console.warn('[BookScanner] Could not read container metadata, using file name:', err);
     }
+    return {};
+  }
+
+  /**
+   * The publisher's own title beats any guess from a filename — the name only records what a
+   * downloader typed — but it still passes through the cleaner, because release sites tag their
+   * exports inside the metadata too.
+   */
+  static mergeWithFileName(
+    fileName: string,
+    container: { title?: string; author?: string }
+  ): { title: string; author: string } {
+    const fromName = this.parseFileName(fileName);
+    if (!container.title) return fromName;
+
+    return {
+      title: inferBookMetadata({ title: container.title, fileName: '', author: container.author }).title || fromName.title,
+      author: container.author || fromName.author,
+    };
   }
 }
