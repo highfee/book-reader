@@ -5,13 +5,14 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Platform,
   TextInput,
   Modal,
   Pressable,
   ActivityIndicator,
-} from 'react-native';import { SafeAreaView } from 'react-native-safe-area-context';
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert } from '@/utils/alert';
 import {
   Folder,
   RefreshCw,

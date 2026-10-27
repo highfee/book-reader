@@ -8,9 +8,9 @@ import {
   StyleSheet,
   Pressable,
   ScrollView,
-  Alert,
   Platform,
 } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { X, Plus, Trash2, Bookmark, Heart, Book, Compass, Sparkles, FolderPlus } from 'lucide-react-native';
 import { BookRepository } from '@/services/database/bookRepository';
 import { Shelf } from '@/types/book';

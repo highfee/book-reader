@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   Platform,
 } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { X, Cloud, RefreshCw, LogOut, CheckCircle2, User, Lock, Mail } from 'lucide-react-native';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { AppPalette } from '@/constants/theme';

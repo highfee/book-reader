@@ -7,9 +7,9 @@ import {
   StyleSheet,
   Switch,
   TextInput,
-  Alert,
   Platform,
 } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { Bell, Clock, Sparkles, X, ShieldAlert } from 'lucide-react-native';
 import { Fonts } from '@/constants/theme';
 import {

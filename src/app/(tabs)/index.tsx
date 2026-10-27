@@ -10,8 +10,8 @@ import {
   Platform,
   ScrollView,
   TextInput,
-  Alert,
 } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';

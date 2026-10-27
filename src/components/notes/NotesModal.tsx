@@ -7,9 +7,9 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert,
   Platform,
 } from 'react-native';
+import { Alert } from '@/utils/alert';
 import { X, Plus, Trash2, Highlighter, StickyNote, Check } from 'lucide-react-native';
 import { HighlightNote } from '@/types/book';
 import { BookRepository } from '@/services/database/bookRepository';

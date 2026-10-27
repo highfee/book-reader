@@ -4,6 +4,7 @@ import { DarkTheme, ThemeProvider, Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { DatabaseService } from '@/services/database/db';
 import { ReadingNotificationService } from '@/services/notifications/readingNotificationService';
+import { AlertHost } from '@/utils/alert';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -39,6 +40,7 @@ export default function RootLayout() {
         <Stack.Screen name="book/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="reader/[id]" options={{ headerShown: false }} />
       </Stack>
+      <AlertHost />
     </ThemeProvider>
   );
 }
